@@ -1,0 +1,4 @@
+project_id = "afjzycyffhhyifixtelq"
+
+[functions.create-ops-user]
+verify_jwt = false

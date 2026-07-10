@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Admin hub | Unite Staycation</title>
+  <meta name="description" content="Trang quản trị nhanh Unite Staycation." />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/custom.css?v=ops-v10" />
+  <link rel="stylesheet" href="css/ops.css?v=ops-v11" />
+</head>
+<body data-page="admin">
+  <header class="site-header" id="siteHeader">
+    <a class="brand" href="index.html" aria-label="Unite Staycation">
+      <span class="brand-logo"><img src="logo/logo.png" alt="Unite Staycation logo"></span>
+      <span class="brand-copy">
+        <strong>Unite Staycation</strong>
+        <small>Admin hub</small>
+      </span>
+    </a>
+    <nav class="top-nav">
+      <a href="admin-live.html">Admin live</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="cskh.html">CSKH</a>
+      <a href="rooms.html">Chọn phòng</a>
+      <a class="nav-cta" href="index.html">Trang chính</a>
+    </nav>
+  </header>
+
+  <main class="ops-page">
+    <section class="ops-hero">
+      <div>
+        <p class="section-kicker">Admin hub</p>
+        <h1>Điều chỉnh nhanh nội dung web.</h1>
+        <p>Trang này giữ các công cụ quản trị nhẹ trong trình duyệt. Với dữ liệu live, dùng Admin live để đồng bộ Supabase.</p>
+      </div>
+      <div class="ops-actions">
+        <a class="btn primary small" href="admin-live.html">Mở Admin live</a>
+        <button class="btn soft small" type="button" id="adminResetOverrides">Dữ liệu mặc định</button>
+      </div>
+    </section>
+
+    <section class="ops-panel auth-panel" id="opsAuthPanel" hidden>
+      <div>
+        <span class="panel-kicker">Supabase auth</span>
+        <h2>Đăng nhập vận hành</h2>
+        <p class="sync-note" id="opsAuthState">Chưa đăng nhập.</p>
+      </div>
+      <form class="auth-form" id="opsLoginForm">
+        <label>Email
+          <input name="email" type="email" autocomplete="username" placeholder="Email admin" required>
+        </label>
+        <label>Mật khẩu
+          <input name="password" type="password" autocomplete="current-password" placeholder="Mật khẩu Supabase" required>
+        </label>
+        <button class="btn primary small" type="submit">Đăng nhập</button>
+      </form>
+      <button class="btn soft small" type="button" id="opsLogoutBtn" hidden>Đăng xuất</button>
+    </section>
+
+    <section class="sync-strip">
+      <div>
+        <span class="panel-kicker">Room</span>
+        <p class="sync-note">Chỉnh số lượng phòng, trạng thái và tiện ích hiển thị nhanh.</p>
+      </div>
+      <div>
+        <span class="panel-kicker">Contact</span>
+        <p class="sync-note">Quản lý các kênh liên hệ như Zalo, Fanpage, Instagram, hotline.</p>
+      </div>
+      <div>
+        <span class="panel-kicker">Booking bar</span>
+        <p class="sync-note">Thanh đặt phòng nhanh vẫn có thể mở ngay trên trang quản trị.</p>
+      </div>
+    </section>
+
+    <section class="ops-grid kpi-grid" id="adminMetrics"></section>
+
+    <section class="ops-layout">
+      <article class="ops-panel">
+        <div class="ops-actions" style="justify-content:space-between">
+          <div>
+            <span class="panel-kicker">Room manager</span>
+            <h2>Phòng / layout</h2>
+          </div>
+          <p class="sync-note" id="adminSaveState">Thay đổi sẽ lưu trong trình duyệt.</p>
+        </div>
+        <div class="booking-list" id="adminRoomManager"></div>
+      </article>
+
+      <article class="ops-panel">
+        <span class="panel-kicker">Amenities</span>
+        <h2>Tiện ích</h2>
+        <div class="insight-list" id="adminAmenityCatalog"></div>
+      </article>
+    </section>
+
+    <section class="ops-panel">
+      <div class="ops-actions" style="justify-content:space-between">
+        <div>
+          <span class="panel-kicker">Contact channels</span>
+          <h2>Kênh liên hệ</h2>
+          <p class="sync-note" id="adminContactState">Chỉnh kênh liên hệ hiện trên popup đặt phòng.</p>
+        </div>
+        <div class="ops-actions">
+          <button class="btn soft small" type="button" id="adminAddContactChannel">Thêm kênh</button>
+          <button class="btn soft small" type="button" id="adminResetContactChannels">Mặc định</button>
+        </div>
+      </div>
+      <div class="booking-list" id="adminContactManager"></div>
+    </section>
+
+    <section class="ops-panel">
+      <span class="panel-kicker">Booking widget</span>
+      <h2>Thanh đặt phòng nhanh</h2>
+      <div id="adminBookingMount"></div>
+    </section>
+  </main>
+
+  <script src="js/supabase-config.js?v=ops-v10"></script>
+  <script src="js/ops-data.js?v=ops-v11"></script>
+  <script src="js/rooms.js?v=ops-v10"></script>
+  <script src="js/app.js?v=ops-v11"></script>
+</body>
+</html>

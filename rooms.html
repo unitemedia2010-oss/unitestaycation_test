@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Chọn phòng | Unite Staycation</title>
+  <meta name="description" content="Chọn phòng Unite Staycation theo địa điểm, ngày, gói lưu trú và số khách." />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/custom.css?v=ops-v7" />
+</head>
+<body data-page="rooms">
+  <div class="page-progress" id="pageProgress"></div>
+
+  <header class="site-header" id="siteHeader">
+    <a class="brand" href="index.html" aria-label="Unite Staycation">
+      <span class="brand-logo"><img src="logo/logo.png" alt="Unite Staycation logo"></span>
+      <span class="brand-copy">
+        <strong>Unite Staycation</strong>
+        <small>Choose your stay</small>
+      </span>
+    </a>
+    <nav class="top-nav">
+      <a href="index.html#about">Về Unite</a>
+      <a href="index.html#roomReel">Bộ sưu tập</a>
+      <a href="index.html#homes">Địa điểm</a>
+      <a href="index.html#priceList">Bảng giá</a>
+      <a href="index.html#rules">Nội quy</a>
+      <a href="index.html#bookingFlow">Cách đặt</a>
+      <a class="nav-cta" href="rooms.html">Đặt phòng</a>
+    </nav>
+    <div class="header-tools" aria-label="Công cụ nhanh">
+      <button class="tool-icon" type="button" aria-label="Liên hệ nhanh">☎</button>
+      <div class="language-switcher" id="languageSwitcher">
+        <button class="language-current" type="button" id="languageToggle" aria-expanded="false">
+          <span>•</span><strong>VIE</strong>
+        </button>
+        <div class="language-menu" id="languageMenu" aria-label="Chọn ngôn ngữ">
+          <button type="button" data-lang="ENG"><span>•</span> ENG</button>
+          <button type="button" data-lang="VIE" class="active"><span>•</span> VIE</button>
+          <button type="button" data-lang="CHN"><span>•</span> CHN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="rooms-results-page">
+    <section class="results-hero">
+      <p class="section-kicker">Room finder</p>
+      <h1>Chọn phòng phù hợp với lịch stay của bạn.</h1>
+      <p id="roomsResultQuery">Đang chuẩn bị danh sách phòng phù hợp.</p>
+    </section>
+
+    <section class="home-booking-bar results-booking-bar reveal-up" id="homeBookingBar" aria-label="Tìm phòng nhanh">
+      <div class="booking-field" data-panel="destination">
+        <button type="button" class="booking-trigger" aria-expanded="false">
+          <span>Địa điểm</span>
+          <strong id="bookingDestinationText">Tất cả địa điểm</strong>
+          <small>Chọn khu stay bạn muốn xem.</small>
+        </button>
+        <div class="booking-popover destination-popover" data-booking-panel="destination">
+          <button type="button" data-destination="all" class="active">Tất cả địa điểm <small>7 layout đang mở</small></button>
+          <button type="button" data-destination="Chi nhánh Nhiêu Tứ">Chi nhánh Nhiêu Tứ <small>ÉLAN, NOIR</small></button>
+          <button type="button" data-destination="Chi nhánh Phan Tây Hồ">Chi nhánh Phan Tây Hồ <small>THE ART, VELVET, MIDNIGHT</small></button>
+          <button type="button" data-destination="Chi nhánh Lê Văn Sĩ">Chi nhánh Lê Văn Sĩ <small>Amor, Roma</small></button>
+        </div>
+      </div>
+
+      <div class="booking-field" data-panel="dates">
+        <button type="button" class="booking-trigger" aria-expanded="false">
+          <span>Nhận phòng</span>
+          <strong id="bookingDateText">Hôm nay</strong>
+          <small id="bookingCheckoutText">Trả phòng theo gói đã chọn.</small>
+        </button>
+        <div class="booking-popover date-popover" data-booking-panel="dates">
+          <div class="calendar-toolbar">
+            <button type="button" id="calendarPrev" aria-label="Tháng trước">‹</button>
+            <strong>Lịch lưu trú</strong>
+            <button type="button" id="calendarNext" aria-label="Tháng sau">›</button>
+          </div>
+          <div class="calendar-months" id="bookingCalendar"></div>
+        </div>
+      </div>
+
+      <div class="booking-field" data-panel="duration">
+        <button type="button" class="booking-trigger" aria-expanded="false">
+          <span>Thời lượng</span>
+          <strong id="bookingDurationText">3 giờ</strong>
+          <small>Linh hoạt cho nghỉ nhanh hoặc stay dài hơn.</small>
+        </button>
+        <div class="booking-popover duration-popover" data-booking-panel="duration">
+          <button type="button" data-duration="3 tiếng" class="active">3 giờ <small>Nghỉ nhanh, xem phim</small></button>
+          <button type="button" data-duration="4 tiếng">4 giờ <small>Thoải mái hơn một chút</small></button>
+          <button type="button" data-duration="8 tiếng">8 giờ <small>Nửa ngày riêng tư</small></button>
+          <button type="button" data-duration="Ngày">Theo ngày <small>Ở lâu, check-in rõ lịch</small></button>
+          <div class="night-stepper" id="bookingNightsWrap" hidden>
+            <span><strong>Số đêm</strong><small>Cho đặt theo ngày hoặc nhiều ngày.</small></span>
+            <div class="counter-control">
+              <button type="button" data-night-step="-1">−</button>
+              <strong id="bookingNightCount">1</strong>
+              <button type="button" data-night-step="1">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="booking-field" data-panel="guests">
+        <button type="button" class="booking-trigger" aria-expanded="false">
+          <span>Khách</span>
+          <strong id="bookingGuestText">2 người lớn</strong>
+          <small>Tối đa 2 khách theo nội quy.</small>
+        </button>
+        <div class="booking-popover guest-popover" data-booking-panel="guests">
+          <div class="guest-row">
+            <span><strong>Người lớn</strong><small>Từ 13 tuổi trở lên</small></span>
+            <div class="counter-control">
+              <button type="button" data-counter="adults" data-step="-1">−</button>
+              <strong id="adultCount">2</strong>
+              <button type="button" data-counter="adults" data-step="1">+</button>
+            </div>
+          </div>
+          <div class="guest-row">
+            <span><strong>Trẻ em</strong><small>Dưới 13 tuổi</small></span>
+            <div class="counter-control">
+              <button type="button" data-counter="children" data-step="-1">−</button>
+              <strong id="childCount">0</strong>
+              <button type="button" data-counter="children" data-step="1">+</button>
+            </div>
+          </div>
+          <p>Unite ưu tiên tối đa 2 khách/phòng. Nếu có nhu cầu khác, admin sẽ xác nhận riêng.</p>
+        </div>
+      </div>
+
+      <button class="btn primary booking-search-btn" type="button" id="bookingSearchBtn">Cập nhật</button>
+    </section>
+
+    <div class="booking-result-note" id="bookingResultNote" aria-live="polite">Danh sách sẽ tự lọc theo thông tin tìm kiếm của bạn.</div>
+
+    <section class="results-layout">
+      <aside class="results-sidebar reveal-up" aria-label="Bộ lọc nhanh">
+        <div class="result-map-card">
+          <span>US</span>
+          <strong>Phú Nhuận</strong>
+          <small>3 chi nhánh · 7 layout</small>
+        </div>
+        <div class="filter-panel">
+          <h2>Lọc nhanh</h2>
+          <label><input type="checkbox" data-result-filter="bathtub"> Có bồn tắm</label>
+          <label><input type="checkbox" data-result-filter="signature"> Signature</label>
+          <label><input type="checkbox" data-result-filter="budget"> Giá tốt</label>
+          <label><input type="checkbox" data-result-filter="available"> Đang mở</label>
+        </div>
+        <div class="filter-panel">
+          <h2>Tiện ích nổi bật</h2>
+          <div id="resultsAmenitySummary" class="results-amenity-summary"></div>
+        </div>
+      </aside>
+
+      <section class="results-main">
+        <div class="results-toolbar reveal-up">
+          <div>
+            <span id="roomsResultCount">0 lựa chọn</span>
+            <strong>Phòng phù hợp</strong>
+          </div>
+          <select id="roomsSort" aria-label="Sắp xếp phòng">
+            <option value="recommended">Gợi ý phù hợp</option>
+            <option value="price-asc">Giá thấp đến cao</option>
+            <option value="price-desc">Giá cao đến thấp</option>
+          </select>
+        </div>
+        <div id="roomsResultList" class="room-result-list" aria-live="polite"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="js/supabase-config.js?v=ops-v7"></script>
+  <script src="js/rooms.js?v=ops-v7"></script>
+  <script src="js/app.js?v=ops-v11"></script>
+  <script src="js/luxury-effects.js"></script>
+</body>
+</html>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Unite Staycation | Boutique Private Rooms</title>
+  <meta name="description" content="Unite Staycation - riêng tư, thoải mái, dễ chịu. Khám phá layout phòng, bảng giá, nội quy lưu trú và liên hệ đặt phòng." />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/custom.css?v=ops-v8" />
+</head>
+<body data-page="home">
+  <div class="page-progress" id="pageProgress"></div>
+
+  <div class="page-loader" id="pageLoader" aria-hidden="true">
+    <div>
+      <span>US</span>
+      <p>Preparing your private stay...</p>
+    </div>
+  </div>
+
+  <header class="site-header" id="siteHeader">
+    <a class="brand" href="index.html" aria-label="Unite Staycation">
+      <span class="brand-logo"><img src="logo/logo.png" alt="Unite Staycation logo"></span>
+      <span class="brand-copy">
+        <strong>Unite Staycation</strong>
+        <small>Feel at home</small>
+      </span>
+    </a>
+
+    <nav class="top-nav">
+      <a href="#about">Về Unite</a>
+      <a href="#roomReel">Bộ sưu tập</a>
+      <a href="#homes">Địa điểm</a>
+      <a href="#priceList">Bảng giá</a>
+      <a href="#rules">Nội quy</a>
+      <a href="#bookingFlow">Cách đặt</a>
+      <a class="nav-cta" href="rooms.html">Đặt phòng</a>
+    </nav>
+
+    <div class="header-tools" aria-label="Công cụ nhanh">
+      <button class="tool-icon" type="button" aria-label="Liên hệ nhanh">☎</button>
+      <div class="language-switcher" id="languageSwitcher">
+        <button class="language-current" type="button" id="languageToggle" aria-expanded="false">
+          <span>•</span><strong>VIE</strong>
+        </button>
+        <div class="language-menu" id="languageMenu" aria-label="Chọn ngôn ngữ">
+          <button type="button" data-lang="ENG"><span>•</span> ENG</button>
+          <button type="button" data-lang="VIE" class="active"><span>•</span> VIE</button>
+          <button type="button" data-lang="CHN"><span>•</span> CHN</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero-cinematic">
+      <div class="hero-noise" aria-hidden="true"></div>
+
+      <div class="hero-outline" aria-hidden="true">
+        <span>UNITE</span>
+        <span>STAYCATION</span>
+      </div>
+
+      <div class="hero-copy reveal-up">
+        <p class="eyebrow">Private rooms · Boutique living · Curated stay</p>
+
+        <div class="hero-logo image-logo">
+          <img src="logo/logo.png" alt="Unite Staycation logo">
+        </div>
+
+        <h1 class="hero-title">
+          <span>Private</span>
+          <em>Staycation</em>
+        </h1>
+
+        <div class="hero-values" aria-label="Giá trị Unite Staycation">
+          <span>Riêng tư</span>
+          <span>Thoải mái</span>
+          <span>Dễ chịu</span>
+        </div>
+
+        <p class="hero-subtitle">
+          Những căn phòng boutique riêng tư giữa thành phố, tinh tế, ấm áp và sẵn sàng cho một kỳ nghỉ ngắn đầy cảm xúc.
+        </p>
+
+        <div class="hero-actions">
+          <a class="btn primary magnetic" href="#roomReel">Xem bộ sưu tập</a>
+          <a class="btn ghost magnetic" href="#priceList">Bảng giá</a>
+        </div>
+      </div>
+
+      <div class="hero-stack" id="heroStack" aria-label="Ảnh nổi bật Unite Staycation"></div>
+
+      <div class="scroll-cue" aria-hidden="true">
+        <span></span>
+        Scroll
+      </div>
+    </section>
+
+    <section class="home-booking-bar reveal-up" id="homeBookingBar" aria-label="Tìm phòng nhanh">
+      <div class="booking-field" data-panel="destination">
+        <button type="button" class="booking-trigger" aria-expanded="false">
+          <span>Địa điểm</span>
+          <strong id="bookingDestinationText">Tất cả địa điểm</strong>
+          <small>Chọn khu stay bạn muốn xem.</small>
+        </button>
+        <div class="booking-popover destination-popover" data-booking-panel="destination">
+          <button type="button" data-destination="all" class="active">Tất cả địa điểm <small>7 layout đang mở</small></button>
+          <button type="button" data-destination="Chi nhánh Nhiêu Tứ">Chi nhánh Nhiêu Tứ <small>ÉLAN, NOIR</small></button>
+          <button type="button" data-destination="Chi nhánh Phan Tây Hồ">Chi nhánh Phan Tây Hồ <small>THE ART, VELVET, MIDNIGHT</small></button>
+          <button type="button" data-destination="Chi nhánh Lê Văn Sĩ">Chi nhánh Lê Văn Sĩ <small>Amor, Roma</small></button>
+        </div>
+      </div>
+
+      <div class="booking-field" data-panel="dates">
+        <button type="button" class="booking-trigger" aria-expanded="false">
+          <span>Nhận phòng</span>
+          <strong id="bookingDateText">Hôm nay</strong>
+          <small id="bookingCheckoutText">Trả phòng theo gói đã chọn.</small>
+        </button>
+        <div class="booking-popover date-popover" data-booking-panel="dates">
+          <div class="calendar-toolbar">
+            <button type="button" id="calendarPrev" aria-label="Tháng trước">‹</button>
+            <strong>Lịch lưu trú</strong>
+            <button type="button" id="calendarNext" aria-label="Tháng sau">›</button>
+          </div>
+          <div class="calendar-months" id="bookingCalendar"></div>
+        </div>
+      </div>
+
+      <div class="booking-field" data-panel="duration">
+        <button type="button" class="booking-trigger" aria-expanded="false">
+          <span>Thời lượng</span>
+          <strong id="bookingDurationText">3 giờ</strong>
+          <small>Linh hoạt cho nghỉ nhanh hoặc stay dài hơn.</small>
+        </button>
+        <div class="booking-popover duration-popover" data-booking-panel="duration">
+          <button type="button" data-duration="3 tiếng" class="active">3 giờ <small>Nghỉ nhanh, xem phim</small></button>
+          <button type="button" data-duration="4 tiếng">4 giờ <small>Thoải mái hơn một chút</small></button>
+          <button type="button" data-duration="8 tiếng">8 giờ <small>Nửa ngày riêng tư</small></button>
+          <button type="button" data-duration="Ngày">Theo ngày <small>Ở lâu, check-in rõ lịch</small></button>
+          <div class="night-stepper" id="bookingNightsWrap" hidden>
+            <span><strong>Số đêm</strong><small>Cho đặt theo ngày hoặc nhiều ngày.</small></span>
+            <div class="counter-control">
+              <button type="button" data-night-step="-1">−</button>
+              <strong id="bookingNightCount">1</strong>
+              <button type="button" data-night-step="1">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="booking-field" data-panel="guests">
+        <button type="button" class="booking-trigger" aria-expanded="false">
+          <span>Khách</span>
+          <strong id="bookingGuestText">2 người lớn</strong>
+          <small>Tối đa 2 khách theo nội quy.</small>
+        </button>
+        <div class="booking-popover guest-popover" data-booking-panel="guests">
+          <div class="guest-row">
+            <span><strong>Người lớn</strong><small>Từ 13 tuổi trở lên</small></span>
+            <div class="counter-control">
+              <button type="button" data-counter="adults" data-step="-1">−</button>
+              <strong id="adultCount">2</strong>
+              <button type="button" data-counter="adults" data-step="1">+</button>
+            </div>
+          </div>
+          <div class="guest-row">
+            <span><strong>Trẻ em</strong><small>Dưới 13 tuổi</small></span>
+            <div class="counter-control">
+              <button type="button" data-counter="children" data-step="-1">−</button>
+              <strong id="childCount">0</strong>
+              <button type="button" data-counter="children" data-step="1">+</button>
+            </div>
+          </div>
+          <p>Unite ưu tiên tối đa 2 khách/phòng. Nếu có nhu cầu khác, admin sẽ xác nhận riêng.</p>
+        </div>
+      </div>
+
+      <button class="btn primary booking-search-btn" type="button" id="bookingSearchBtn">Tìm phòng</button>
+    </section>
+    <div class="booking-result-note" id="bookingResultNote" aria-live="polite">Chọn lịch stay, Unite sẽ gợi ý phòng phù hợp.</div>
+
+    <section id="about" class="about-section">
+      <div class="about-media reveal-up">
+        <img src="img/C8-THE-ART/0.jpg" alt="Không gian Unite Staycation" loading="lazy" />
+      </div>
+
+      <div class="about-copy reveal-up">
+        <p class="section-kicker">Về Unite</p>
+        <h2 class="smart-title about-title">
+          <span class="keep-phrase">Mỗi kỳ nghỉ</span>
+          <span class="keep-phrase">đều xứng đáng</span>
+          <span class="keep-phrase">được <em>nâng niu</em></span>.
+        </h2>
+        <p>
+          Unite Staycation được tạo nên với mong muốn mang đến một không gian nghỉ ngơi riêng tư,
+          tinh tế và đầy cảm xúc.
+        </p>
+        <p>
+          Từ ánh sáng, nội thất đến từng góc nhỏ trong phòng đều được chăm chút để bạn có thể thư giãn,
+          tận hưởng và lưu giữ những khoảnh khắc đáng nhớ bên người mình yêu thương.
+        </p>
+      </div>
+    </section>
+
+    <section id="roomReel" class="reel-section">
+      <div class="reel-heading reveal-up">
+        <div>
+          <p class="section-kicker">Room Collection</p>
+          <h2 class="smart-title reel-title">
+            <span class="keep-phrase">Khám phá những căn phòng</span>
+            <span class="keep-phrase">mang dấu ấn riêng</span>.
+          </h2>
+        </div>
+        <div class="reel-controls" aria-label="Điều khiển Room Collection">
+          <button class="circle-btn" id="reelPrev" type="button" aria-label="Lùi">‹</button>
+          <button class="circle-btn" id="reelNext" type="button" aria-label="Tiến">›</button>
+        </div>
+      </div>
+
+      <div class="reel-window cursor-grab" id="reelWindow" aria-label="Room Collection có thể kéo ngang">
+        <div class="reel-track" id="reelTrack"></div>
+      </div>
+    </section>
+
+    <section id="homes" class="section editorial-intro">
+      <div class="reveal-up">
+        <p class="section-kicker">Stay Collection</p>
+        <h2 class="smart-title homes-title">
+          <span class="keep-phrase">Các không gian lưu trú</span>
+          <span class="keep-phrase">tại Unite Staycation</span>.
+        </h2>
+      </div>
+      <p class="section-desc reveal-up">
+        Khám phá các layout tại từng chi nhánh, mỗi căn phòng mang một tinh thần riêng: riêng tư, tinh tế và dễ chịu cho từng khoảnh khắc lưu trú.
+      </p>
+    </section>
+
+    <section class="home-block reveal-up">
+      <div class="home-head">
+        <div>
+          <span>01</span>
+          <h2>Chi nhánh Nhiêu Tứ</h2>
+          <p>Các layout hiện có</p>
+        </div>
+        <a class="btn soft" href="#priceList">Bảng giá</a>
+      </div>
+      <div class="home-room-grid" id="homeNhieuTu"></div>
+    </section>
+
+    <section class="home-block reveal-up">
+      <div class="home-head">
+        <div>
+          <span>02</span>
+          <h2>Chi nhánh Phan Tây Hồ</h2>
+          <p>Các layout hiện có</p>
+        </div>
+        <a class="btn soft" href="#priceList">Bảng giá</a>
+      </div>
+      <div class="home-room-grid" id="homePhanTayHo"></div>
+    </section>
+
+    <section class="home-block reveal-up">
+      <div class="home-head">
+        <div>
+          <span>03</span>
+          <h2>Chi nhánh Lê Văn Sĩ</h2>
+          <p>Các layout hiện có</p>
+        </div>
+        <a class="btn soft" href="#priceList">Bảng giá</a>
+      </div>
+      <div class="home-room-grid" id="homeLeVanSi"></div>
+    </section>
+
+    <section id="priceList" class="price-section">
+      <div class="section price-intro">
+        <div class="reveal-up">
+          <p class="section-kicker">Stay price</p>
+          <h2 class="smart-title price-title">
+            <span class="keep-phrase">Bảng giá</span>
+            <span class="keep-phrase">lưu trú</span>
+          </h2>
+        </div>
+        <p class="section-desc reveal-up">
+          Tham khảo khung giá theo thời lượng lưu trú. Giá có thể thay đổi theo thời điểm, ngày đặc biệt và tình trạng phòng thực tế.
+        </p>
+      </div>
+
+      <section class="filter-bar" aria-label="Bộ lọc phòng">
+        <button class="filter-btn active" data-filter="all">Tất cả</button>
+        <button class="filter-btn" data-filter="Chi nhánh Nhiêu Tứ">Nhiêu Tứ</button>
+        <button class="filter-btn" data-filter="Chi nhánh Phan Tây Hồ">Phan Tây Hồ</button>
+        <button class="filter-btn" data-filter="Chi nhánh Lê Văn Sĩ">Lê Văn Sĩ</button>
+        <button class="filter-btn" data-filter="bathtub">Có bồn tắm</button>
+        <button class="filter-btn" data-filter="budget">Giá tốt</button>
+        <button class="filter-btn" data-filter="signature">Signature</button>
+      </section>
+
+      <section class="price-compare-wrap">
+        <div id="priceCompare" class="price-compare" aria-live="polite"></div>
+      </section>
+    </section>
+
+    <section id="rules" class="rules-section">
+      <div class="rules-card reveal-up">
+        <div class="rules-brand image-logo">
+          <img src="logo/logo.png" alt="Unite Staycation logo">
+        </div>
+
+        <h2 class="smart-title rules-title">
+          <span class="keep-phrase">Nội quy</span>
+          <span class="keep-phrase">lưu trú</span>
+        </h2>
+        <div class="ornament" aria-hidden="true"></div>
+        <p class="rules-subtitle">House Rules</p>
+
+        <div class="rules-list" id="rulesList"></div>
+
+        <p class="thank-you">Thank you for staying with us!</p>
+      </div>
+    </section>
+
+    <section id="bookingFlow" class="booking-flow-section">
+      <div class="booking-flow-copy reveal-up">
+        <p class="section-kicker">Booking flow</p>
+        <h2>Từ xem phòng đến nhận lịch ở.</h2>
+        <p>Unite giữ chất riêng tư, mềm và có gu; phần vận hành chỉ cần đủ rõ để khách không bị lạc sau khi xem ảnh và bảng giá.</p>
+      </div>
+      <div class="booking-flow-grid reveal-up">
+        <article class="flow-card active"><span>01</span><h3>Chọn vibe phòng</h3><p>Xem bộ sưu tập, mở chi tiết từng layout và chọn đúng cảm giác muốn ở.</p></article>
+        <article class="flow-card"><span>02</span><h3>So sánh giá</h3><p>Lọc theo địa điểm, bồn tắm, signature hoặc giá tốt trước khi nhắn đặt.</p></article>
+        <article class="flow-card"><span>03</span><h3>Xác nhận lịch</h3><p>Admin kiểm tra lịch trống, giá theo khung giờ và gửi hướng dẫn thanh toán.</p></article>
+        <article class="flow-card"><span>04</span><h3>Nhận check-in</h3><p>Khách nhận thông tin chi nhánh, nội quy và hướng dẫn trong suốt kỳ ở.</p></article>
+      </div>
+    </section>
+
+    <section id="contact" class="contact-section">
+      <div class="contact-copy reveal-up">
+        <p class="section-kicker">Liên hệ</p>
+        <h2 class="smart-title contact-title">
+          <span class="keep-phrase">Đặt phòng</span>
+          <span class="keep-phrase"><em>nhanh hơn</em></span>.
+        </h2>
+        <p>Chọn kênh bạn quen dùng, nội dung phòng và lịch sẽ được chuẩn bị sẵn để gửi cho team.</p>
+      </div>
+
+      <div class="contact-grid reveal-up" id="contactChannels"></div>
+    </section>
+
+    <section class="ticker-section" aria-label="Unite Staycation ticker">
+      <div class="ticker-track">
+        <span>PRIVATE ROOMS</span>
+        <span>BOUTIQUE LIVING</span>
+        <span>CURATED STAY</span>
+        <span>FEEL AT HOME</span>
+        <span>UNITE STAYCATION</span>
+        <span>PRIVATE ROOMS</span>
+        <span>BOUTIQUE LIVING</span>
+        <span>CURATED STAY</span>
+        <span>FEEL AT HOME</span>
+        <span>UNITE STAYCATION</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>© Unite Staycation · Riêng tư - Thoải mái - Dễ chịu</p>
+  </footer>
+
+  <script src="js/supabase-config.js?v=ops-v8"></script>
+  <script src="js/rooms.js?v=ops-v8"></script>
+  <script src="js/app.js?v=ops-v11"></script>
+  <script src="js/luxury-effects.js"></script>
+</body>
+</html>

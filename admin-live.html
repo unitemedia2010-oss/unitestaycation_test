@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Admin live | Unite Staycation</title>
+  <meta name="description" content="Quản trị live chi nhánh, layout, giá, khuyến mãi, ảnh phòng và tài khoản vận hành Unite Staycation." />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/custom.css?v=ops-v10" />
+  <link rel="stylesheet" href="css/ops.css?v=ops-v11" />
+</head>
+<body data-page="dashboard">
+  <header class="site-header" id="siteHeader">
+    <a class="brand" href="index.html" aria-label="Unite Staycation">
+      <span class="brand-logo"><img src="logo/logo.png" alt="Unite Staycation logo"></span>
+      <span class="brand-copy">
+        <strong>Unite Staycation</strong>
+        <small>Live admin</small>
+      </span>
+    </a>
+
+    <nav class="top-nav">
+      <a href="admin.html">Admin hub</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="cskh.html">CSKH</a>
+      <a href="rooms.html">Chọn phòng</a>
+      <a class="nav-cta" href="index.html">Trang chính</a>
+    </nav>
+  </header>
+
+  <main class="ops-page">
+    <section class="ops-hero">
+      <div>
+        <p class="section-kicker">Live inventory</p>
+        <h1>Quản trị chi nhánh, layout, giá và ảnh.</h1>
+        <p>Thêm/sửa dữ liệu vận hành, upload ảnh phòng, đồng bộ số lượng phòng lên Supabase và quản quyền tài khoản cho team.</p>
+      </div>
+      <div class="ops-actions">
+        <button class="btn soft small" type="button" id="liveExport">Xuất JSON</button>
+        <button class="btn soft small" type="button" id="liveReset">Dữ liệu mặc định</button>
+      </div>
+    </section>
+
+    <section class="ops-panel auth-panel" id="opsAuthPanel" hidden>
+      <div>
+        <span class="panel-kicker">Supabase auth</span>
+        <h2>Đăng nhập vận hành</h2>
+        <p class="sync-note" id="opsAuthState">Chưa đăng nhập.</p>
+      </div>
+      <form class="auth-form" id="opsLoginForm">
+        <label>Email
+          <input name="email" type="email" autocomplete="username" placeholder="Email admin" required>
+        </label>
+        <label>Mật khẩu
+          <input name="password" type="password" autocomplete="current-password" placeholder="Mật khẩu Supabase" required>
+        </label>
+        <button class="btn primary small" type="submit">Đăng nhập</button>
+      </form>
+      <button class="btn soft small" type="button" id="opsLogoutBtn" hidden>Đăng xuất</button>
+    </section>
+
+    <section class="sync-strip">
+      <div>
+        <span class="panel-kicker">Local draft</span>
+        <p class="sync-note" id="liveLocalState">Dữ liệu đang lưu trong trình duyệt này.</p>
+      </div>
+      <div>
+        <span class="panel-kicker">Supabase sync</span>
+        <p class="sync-note" id="liveSyncState">Đăng nhập để sync live.</p>
+      </div>
+      <div>
+        <span class="panel-kicker">Ảnh</span>
+        <p class="sync-note">Upload vào bucket <code>room-images</code>, kéo thứ tự bằng nút lên/xuống.</p>
+      </div>
+    </section>
+
+    <section class="booking-workspace">
+      <form class="booking-form" id="liveRoomForm">
+        <h2>Layout / phòng</h2>
+        <label>Chi nhánh
+          <select name="branch" id="liveBranchSelect"></select>
+        </label>
+        <label>Thêm chi nhánh mới
+          <input name="newBranch" type="text" placeholder="Ví dụ: Chi nhánh Quận 1">
+        </label>
+        <label>Mã phòng/layout
+          <input name="code" type="text" placeholder="C12-AMOR" required>
+        </label>
+        <label>Tên layout
+          <input name="name" type="text" placeholder="Amor Layout" required>
+        </label>
+        <label>Dạng phòng
+          <input name="category" type="text" placeholder="Romantic bathtub">
+        </label>
+        <label>Tier giá
+          <select name="priceTier">
+            <option value="premium">Premium</option>
+            <option value="signature">Signature</option>
+            <option value="budget">Budget</option>
+          </select>
+        </label>
+        <label>Số lượng phòng
+          <input name="inventory" type="number" min="0" max="20" value="3">
+        </label>
+        <label>Trạng thái
+          <select name="status">
+            <option value="available">Đang mở</option>
+            <option value="limited">Sắp kín</option>
+            <option value="maintenance">Bảo trì</option>
+            <option value="hidden">Ẩn khỏi web</option>
+          </select>
+        </label>
+        <label>Mô tả ngắn
+          <textarea name="description" placeholder="Mô tả dễ hiểu cho khách..."></textarea>
+        </label>
+        <button class="btn primary" type="submit">Lưu layout</button>
+      </form>
+
+      <section class="ops-panel">
+        <div class="ops-actions" style="justify-content:space-between">
+          <div>
+            <span class="panel-kicker">Inventory list</span>
+            <h2>Danh sách layout</h2>
+          </div>
+          <button class="btn soft small" type="button" id="liveSyncSupabase" data-ops-disable-unless="manageInventory">Sync Supabase</button>
+        </div>
+        <div class="booking-list" id="liveRoomList"></div>
+      </section>
+    </section>
+
+    <section class="ops-layout">
+      <form class="booking-form" id="livePriceForm">
+        <h2>Bảng giá</h2>
+        <label>Layout
+          <select name="roomCode" id="livePriceRoom"></select>
+        </label>
+        <label>Gói
+          <select name="packageLabel">
+            <option value="3 tiếng">3 tiếng</option>
+            <option value="4 tiếng">4 tiếng</option>
+            <option value="8 tiếng">8 tiếng</option>
+            <option value="Theo ngày">Theo ngày</option>
+          </select>
+        </label>
+        <label>Giá
+          <input name="price" type="text" inputmode="numeric" placeholder="299,000">
+        </label>
+        <button class="btn primary" type="submit">Cập nhật giá</button>
+      </form>
+
+      <form class="booking-form" id="livePromoForm">
+        <h2>Khuyến mãi</h2>
+        <label>Layout
+          <select name="roomCode" id="livePromoRoom"></select>
+        </label>
+        <label>Nhãn giảm giá
+          <input name="badge" type="text" placeholder="20% OFF">
+        </label>
+        <label>Phần trăm giảm
+          <input name="percent" type="number" min="0" max="100" value="0">
+        </label>
+        <label>Bật giao diện giảm giá
+          <select name="enabled">
+            <option value="true">Bật</option>
+            <option value="false">Tắt</option>
+          </select>
+        </label>
+        <button class="btn primary" type="submit">Lưu khuyến mãi</button>
+      </form>
+    </section>
+
+    <section class="ops-panel">
+      <div class="ops-actions" style="justify-content:space-between">
+        <div>
+          <span class="panel-kicker">Gallery manager</span>
+          <h2>Ảnh phòng và thứ tự hiển thị</h2>
+        </div>
+        <label class="file-action">
+          <input id="liveImageUpload" type="file" accept="image/*" multiple>
+          <span class="btn soft small">Upload ảnh</span>
+        </label>
+      </div>
+      <label class="ops-inline-label">Layout đang chọn
+        <select id="liveImageRoom"></select>
+      </label>
+      <div class="image-sort-list" id="liveImageList"></div>
+    </section>
+
+    <section class="ops-panel" id="superAdminAccounts" data-ops-permission="manageAccounts">
+      <div class="ops-actions" style="justify-content:space-between">
+        <div>
+          <span class="panel-kicker">Super admin</span>
+          <h2>Tài khoản vận hành</h2>
+          <p class="sync-note">Super admin có thể tạo tài khoản Auth mới ngay tại đây. Service key nằm trong Supabase Edge Function, không lưu trong web tĩnh.</p>
+        </div>
+      </div>
+
+      <form class="auth-form ops-account-form ops-account-create-form" id="liveCreateAccountForm">
+        <label>Email đăng nhập
+          <input name="email" type="email" autocomplete="off" placeholder="cskh@unite..." required>
+        </label>
+        <label>Mật khẩu
+          <input name="password" type="password" autocomplete="new-password" placeholder="Tối thiểu 6 ký tự" required>
+        </label>
+        <label>Tên hiển thị
+          <input name="fullName" type="text" placeholder="CSKH 01" required>
+        </label>
+        <label>Số điện thoại
+          <input name="phone" type="tel" placeholder="090...">
+        </label>
+        <label>Quyền
+          <select name="role">
+            <option value="cskh">CSKH</option>
+            <option value="manager">Quản lý</option>
+            <option value="admin">Admin</option>
+            <option value="super_admin">Super admin</option>
+          </select>
+        </label>
+        <label>Trạng thái
+          <select name="isActive">
+            <option value="true">Đang mở</option>
+            <option value="false">Khóa quyền</option>
+          </select>
+        </label>
+        <button class="btn primary small" type="submit">Tạo tài khoản</button>
+      </form>
+
+      <p class="sync-note">Dự phòng: nếu Auth user đã được tạo sẵn ở Supabase, dán UID vào form dưới để gán hoặc sửa quyền.</p>
+      <form class="auth-form ops-account-form" id="liveAccountForm">
+        <label>UID tài khoản Supabase
+          <input name="id" type="text" placeholder="UUID trong Authentication > Users" required>
+        </label>
+        <label>Email
+          <input name="email" type="email" placeholder="email@unite...">
+        </label>
+        <label>Tên hiển thị
+          <input name="fullName" type="text" placeholder="CSKH 01">
+        </label>
+        <label>Quyền
+          <select name="role">
+            <option value="super_admin">Super admin</option>
+            <option value="admin">Admin</option>
+            <option value="manager">Quản lý</option>
+            <option value="cskh">CSKH</option>
+          </select>
+        </label>
+        <label>Trạng thái
+          <select name="isActive">
+            <option value="true">Đang mở</option>
+            <option value="false">Khóa quyền</option>
+          </select>
+        </label>
+        <button class="btn primary small" type="submit">Lưu quyền</button>
+      </form>
+      <p class="sync-note" id="liveAccountState">Chỉ super admin mới thấy và chỉnh được khu này.</p>
+      <div class="booking-list" id="liveAccountList"></div>
+    </section>
+  </main>
+
+  <script src="js/supabase-config.js?v=ops-v10"></script>
+  <script src="js/rooms.js?v=ops-v10"></script>
+  <script src="js/ops-data.js?v=ops-v11"></script>
+  <script src="js/admin-live.js?v=ops-v11"></script>
+</body>
+</html>
