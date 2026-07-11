@@ -5,7 +5,7 @@ const makeImages = (folder, total) => {
   return Array.from({ length: total }, (_, index) => `img/${folder}/${index}.jpg`);
 };
 
-const rooms = [
+var rooms = [
   {
     id: "C1-ELAN",
     chapter: "Chapter 1",
@@ -160,7 +160,7 @@ const rooms = [
     tags: ["Studio", "Bồn tắm", "Romantic", "Couple"],
     amenities: ["wifi", "aircon", "bathtub", "tv", "self-checkin", "support", "photo-corner"],
     filters: ["Chi nhánh Lê Văn Sĩ", "Phú Nhuận", "bathtub", "signature"],
-    images: makeImages("C8-THE-ART", 5)
+    images: makeImages("C12-AMOR", 5)
   },
   {
     id: "C12-ROMA",
@@ -186,7 +186,7 @@ const rooms = [
     tags: ["Studio", "Ấm sang", "Private", "Classic"],
     amenities: ["wifi", "aircon", "tv", "self-checkin", "support", "photo-corner"],
     filters: ["Chi nhánh Lê Văn Sĩ", "Phú Nhuận"],
-    images: makeImages("C9-VELVET", 4)
+    images: makeImages("C12-ROMA", 4)
   }
 ];
 
@@ -204,3 +204,6 @@ const houseRules = [
   { icon: "▣", text: "Chủ động bảo quản tài sản cá nhân trong thời gian lưu trú. Kiểm tra kỹ tư trang cá nhân trước khi trả phòng." },
   { icon: "◇", text: "Bảo quản tài sản của home. Nếu làm hỏng/mất, sẽ tính theo bảng giá dịch vụ đính kèm." }
 ];
+
+
+window.rooms = rooms;

@@ -3845,3 +3845,171 @@ body[data-page="rooms"] {
     overflow-y: auto;
   }
 }
+
+/* =========================================================
+   V12 PATCH: language stability + mobile readable rules
+   Giữ nguyên bố cục gốc, chỉ chống mất chữ khi đổi ngôn ngữ.
+   ========================================================= */
+body[data-lang="chn"] {
+  --serif: "Noto Serif SC", "Songti SC", "SimSun", "Microsoft YaHei", Georgia, serif;
+  --script: "Noto Serif SC", "Songti SC", "SimSun", "Microsoft YaHei", Georgia, serif;
+}
+
+body[data-lang="chn"] .about-copy h2.about-title,
+body[data-lang="chn"] .rules-card h2.rules-title,
+body[data-lang="chn"] .home-head h2,
+body[data-lang="chn"] .section h2,
+body[data-lang="chn"] .contact-copy h2 {
+  letter-spacing: -0.025em;
+  word-break: keep-all;
+  overflow-wrap: normal;
+}
+
+body[data-lang="chn"] .about-copy h2.about-title .title-row:nth-child(3) {
+  color: var(--dark-red);
+  font-style: normal;
+  white-space: normal !important;
+}
+
+body[data-lang="chn"] .title-row-inline {
+  display: block !important;
+  white-space: normal !important;
+}
+
+body[data-lang="chn"] .rules-subtitle,
+body[data-lang="chn"] .section-kicker,
+body[data-lang="chn"] .eyebrow {
+  letter-spacing: .14em;
+}
+
+/* Nếu IntersectionObserver trên mobile/Chrome bị miss khi đổi ngôn ngữ,
+   nội quy vẫn hiện đủ thay vì để khoảng trắng lớn. */
+.rules-list .rules-item {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+@media (max-width: 760px) {
+  body[data-lang="chn"] .about-copy h2.about-title {
+    font-size: clamp(38px, 10.4vw, 60px) !important;
+    line-height: 1.12 !important;
+  }
+
+  body[data-lang="chn"] .rules-card h2.rules-title {
+    font-size: clamp(46px, 13.2vw, 70px) !important;
+    line-height: 1.08 !important;
+  }
+
+  body[data-lang="chn"] .rules-section {
+    padding-top: 48px !important;
+    padding-bottom: 48px !important;
+  }
+
+  body[data-lang="chn"] .rules-subtitle {
+    margin-bottom: 22px !important;
+  }
+
+  .rules-list {
+    min-height: auto !important;
+  }
+}
+
+/* =========================================================
+   V14 mobile room detail hotfix
+   - Không đổi direction UI, chỉ vá mobile bị che/mất ảnh/dịch tab.
+   ========================================================= */
+body[data-page="room"] .detail-cover.image-missing {
+  display: none !important;
+}
+
+@media (max-width: 760px) {
+  body[data-page="room"] .room-detail-page {
+    padding-top: calc(118px + env(safe-area-inset-top)) !important;
+    padding-bottom: calc(168px + env(safe-area-inset-bottom)) !important;
+  }
+
+  body[data-page="room"] .detail-subnav {
+    top: max(82px, calc(72px + env(safe-area-inset-top))) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    padding: 6px !important;
+    margin: 0 auto 14px !important;
+    border-radius: 999px !important;
+    overflow: visible !important;
+  }
+
+  body[data-page="room"] .detail-subnav a {
+    min-width: 0 !important;
+    min-height: 36px !important;
+    padding: 0 6px !important;
+    font-size: 11px !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+  }
+
+  body[data-page="room"] .detail-subnav a[href="#faqPanel"] {
+    display: none !important;
+  }
+
+  body[data-page="room"] .detail-top {
+    margin-top: 0 !important;
+  }
+
+  body[data-page="room"] .detail-info h1 {
+    font-size: clamp(48px, 16vw, 76px) !important;
+    line-height: .92 !important;
+  }
+
+  body[data-page="room"] .detail-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  body[data-page="room"] .detail-facts span,
+  body[data-page="room"] .address-box,
+  body[data-page="room"] .package-card {
+    min-width: 0 !important;
+  }
+
+  body[data-page="room"] .detail-facts strong,
+  body[data-page="room"] .address-box strong,
+  body[data-page="room"] .package-card p {
+    overflow-wrap: anywhere !important;
+  }
+
+  body[data-page="room"] .booking-panel,
+  body[data-page="room"] .guide-section,
+  body[data-page="room"] .nearby-section,
+  body[data-page="room"] .faq-section,
+  body[data-page="room"] .related-section,
+  body[data-page="room"] .review-panel {
+    scroll-margin-top: 148px !important;
+  }
+
+  body[data-page="room"] #bookingPanel {
+    margin-bottom: 118px !important;
+  }
+
+  body[data-page="room"] .floating-book {
+    display: none !important;
+  }
+
+  body.is-chinese[data-page="room"] .detail-subnav a {
+    font-size: 12px !important;
+    letter-spacing: 0 !important;
+  }
+
+  body.is-chinese[data-page="room"] .section-line-heading h2,
+  body.is-chinese[data-page="room"] .booking-panel h2 {
+    line-height: 1.12 !important;
+    word-break: keep-all !important;
+  }
+}
+
+/* V15: promotion display from Supabase */
+.promotion-badge{position:absolute;top:14px;right:14px;z-index:3;display:inline-flex;align-items:center;min-height:30px;padding:0 11px;border-radius:999px;background:var(--dark-red,#7a0000);color:#fff;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.price-item strong del{display:block;margin-bottom:2px;color:var(--gray-brown,#574944);font-size:11px;font-weight:700;opacity:.7}
+.layout-thumb,.price-room,.result-photo{position:relative}

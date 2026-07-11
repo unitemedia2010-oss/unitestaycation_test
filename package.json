@@ -1,0 +1,15 @@
+{
+  "name": "unite-staycation-v15-audited",
+  "version": "15.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "upload:images": "node tools/bulk-upload-images.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "latest",
+    "dotenv": "latest",
+    "sharp": "latest"
+  },
+  "description": "Unite Staycation V15 audited live operations with hardened auth, private bills and working promotions"
+}

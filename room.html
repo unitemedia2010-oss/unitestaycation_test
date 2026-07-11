@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Chi tiết phòng | Unite Staycation</title>
-  <meta name="description" content="Xem chi tiết layout phòng, gói lưu trú, hình ảnh và hướng dẫn đặt phòng Unite Staycation." />
+  <title>Room Detail | Unite Staycation</title>
+  <meta name="description" content="Chi tiết layout, hình ảnh và bảng giá phòng Unite Staycation." />
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/custom.css?v=ops-v7" />
+  <link rel="stylesheet" href="css/custom.css?v=v15" />
 </head>
 <body data-page="room">
   <div class="page-progress" id="pageProgress"></div>
@@ -19,34 +19,40 @@
         <small>Room detail</small>
       </span>
     </a>
+
     <nav class="top-nav">
       <a href="index.html#about">Về Unite</a>
-      <a href="rooms.html">Bộ sưu tập</a>
-      <a href="index.html#homes">Địa điểm</a>
+      <a href="index.html#homes">Homes</a>
       <a href="index.html#priceList">Bảng giá</a>
       <a href="index.html#rules">Nội quy</a>
-      <a class="nav-cta" href="#bookingPanel">Đặt phòng</a>
+
+      <a class="nav-cta" href="rooms.html">Đặt phòng</a>
     </nav>
+
     <div class="header-tools" aria-label="Công cụ nhanh">
       <button class="tool-icon" type="button" aria-label="Liên hệ nhanh">☎</button>
       <div class="language-switcher" id="languageSwitcher">
         <button class="language-current" type="button" id="languageToggle" aria-expanded="false">
-          <span>•</span><strong>VIE</strong>
+          <span>●</span><strong>VIE</strong>
         </button>
         <div class="language-menu" id="languageMenu" aria-label="Chọn ngôn ngữ">
-          <button type="button" data-lang="ENG"><span>•</span> ENG</button>
-          <button type="button" data-lang="VIE" class="active"><span>•</span> VIE</button>
-          <button type="button" data-lang="CHN"><span>•</span> CHN</button>
+          <button type="button" data-lang="ENG"><span>●</span> ENG</button>
+          <button type="button" data-lang="VIE" class="active"><span>●</span> VIE</button>
+          <button type="button" data-lang="CHN"><span>●</span> CHN</button>
         </div>
       </div>
     </div>
   </header>
 
-  <main id="roomDetail"></main>
+  <main id="roomDetail" class="room-detail-page"></main>
 
-  <script src="js/supabase-config.js?v=ops-v7"></script>
-  <script src="js/rooms.js?v=ops-v7"></script>
-  <script src="js/app.js?v=ops-v11"></script>
-  <script src="js/luxury-effects.js"></script>
+  <footer class="site-footer">
+    <p>© Unite Staycation · Riêng tư - Thoải mái - Dễ chịu</p>
+  </footer>
+
+  <script src="js/supabase-config.js?v=v15"></script>
+  <script src="js/rooms.js?v=v15"></script>
+  <script src="js/app.js?v=v15"></script>
+  <script src="js/luxury-effects.js?v=v15"></script>
 </body>
 </html>

@@ -4,7 +4,25 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const getMainImage = (room) => room.images?.[0] || "";
-const getPrice = (room, label) => room.prices.find(item => item.label === label)?.value || "-";
+const getPriceItem = (room, label) => room.prices.find(item => item.label === label) || null;
+const getPrice = (room, label) => getPriceItem(room, label)?.value || "-";
+const promotionBadgeHTML = (room) => {
+  const promo = room?.promotion;
+  if (!promo || promo.show_badge === false) return "";
+  const label = promo.badge_label || promo.title || (promo.discount_percent ? `-${promo.discount_percent}%` : "Ưu đãi");
+  return `<span class="promotion-badge">${escapeHTML(label)}</span>`;
+};
+
+const syncStaticLiveImages = () => {
+  $$('[data-live-room-image]').forEach(img => {
+    const room = rooms.find(item => item.id === img.dataset.liveRoomImage);
+    const src = getMainImage(room || {});
+    if (!src) return;
+    img.style.display = "";
+    img.closest('.match-card, .about-media')?.classList.remove('image-missing');
+    if (img.src !== src) img.src = src;
+  });
+};
 
 const imgTag = (src, alt, className = "") => `
   <img
@@ -31,7 +49,6 @@ const formatStayDate = (offsetDays = 0) => {
 };
 
 const ADMIN_STORAGE_KEY = "unite-staycation-admin-overrides-v1";
-const ADMIN_INVENTORY_VERSION = "inventory-v2-three-rooms";
 const SMART_BOOKING_STORAGE_KEY = "unite-staycation-smart-booking-v1";
 const LANG_STORAGE_KEY = "unite-staycation-language-v1";
 const CONTACT_CHANNEL_STORAGE_KEY = "unite-staycation-contact-channels-v2";
@@ -100,7 +117,7 @@ Object.assign(textTranslations, {
   "Bảng giá": { ENG: "Rates", CHN: "价格" },
   "Tìm phòng": { ENG: "Find rooms", CHN: "查找房间" },
   "Cập nhật": { ENG: "Update", CHN: "更新" },
-  "Gợi ý: chọn địa điểm, ngày và gói lưu trú để xem nhóm phòng phù hợp hơn.": {
+  "Chọn địa điểm, ngày và gói lưu trú để xem các layout phù hợp.": {
     ENG: "Tip: choose a location, date and stay package to see better room matches.",
     CHN: "提示：选择位置、日期和入住套餐，即可查看更合适的房间。"
   },
@@ -110,60 +127,60 @@ Object.assign(textTranslations, {
   "đặt phòng rõ ràng": { ENG: "clear booking steps", CHN: "清晰预订流程" },
 
   "Hiểu nhanh": { ENG: "Quick guide", CHN: "快速了解" },
-  "Unite là nơi để bạn": { ENG: "Unite helps you", CHN: "Unite 让你" },
-  "đổi không gian riêng tư.": { ENG: "switch into a private space.", CHN: "切换到私密空间。" },
-  "Trang chính nên giúp khách hiểu ngay: Unite có phòng riêng theo giờ hoặc theo ngày, ảnh phòng xem trước rõ, giá có bảng so sánh và admin xác nhận lịch trước khi khách đến.": {
+  "Một chạm riêng tư": { ENG: "Unite helps you", CHN: "Unite 让你" },
+  "giữa nhịp thành phố.": { ENG: "switch into a private space.", CHN: "切换到私密空间。" },
+  "Các phòng riêng được sắp xếp theo giờ hoặc theo ngày, với hình ảnh, bảng giá và quy trình xác nhận rõ ràng trước khi nhận phòng.": {
     ENG: "The homepage should make the offer clear right away: Unite has private rooms by the hour or by the day, clear room photos, comparable rates and admin confirmation before arrival.",
     CHN: "首页应让客人一眼看懂：Unite 提供按小时或按天的私密房间、清晰照片、价格对比，并由管理员在到店前确认档期。"
   },
-  "Chọn phòng theo vibe": { ENG: "Choose by vibe", CHN: "按氛围选房" },
-  "Mỗi layout có mood riêng: bồn tắm, tone tối, cửa vòm, ấm sang hoặc gọn giá tốt.": {
+  "Chọn theo phong cách": { ENG: "Choose by vibe", CHN: "按氛围选房" },
+  "Mỗi layout mang một chất riêng: bồn tắm, tone tối, cửa vòm, ấm sang hoặc gọn gàng.": {
     ENG: "Each layout has its own mood: bathtub, dark tone, arch details, warm luxury or compact value.",
     CHN: "每个房型都有自己的氛围：浴缸、深色调、拱门、温暖高级感或高性价比小房型。"
   },
-  "Xem giá trước": { ENG: "See rates first", CHN: "先看价格" },
-  "Giá được chia theo 3h, 4h, 8h và ngày để khách dễ tự cân nhắc.": {
+  "Bảng giá rõ ràng": { ENG: "See rates first", CHN: "先看价格" },
+  "Giá được phân theo 3 giờ, 4 giờ, 8 giờ và theo ngày để dễ lựa chọn.": {
     ENG: "Rates are split by 3h, 4h, 8h and day packages so guests can compare easily.",
     CHN: "价格按3小时、4小时、8小时和整日套餐划分，方便客人比较。"
   },
-  "Biết rõ nội quy": { ENG: "Know the rules", CHN: "了解规则" },
-  "Khách xem trước số người, giờ trả phòng, phụ thu và các lưu ý quan trọng.": {
+  "Nội quy minh bạch": { ENG: "Know the rules", CHN: "了解规则" },
+  "Thông tin sức chứa, giờ trả phòng và phụ thu được thể hiện trước khi đặt.": {
     ENG: "Guests can check capacity, check-out timing, surcharges and key notes before booking.",
     CHN: "客人可提前了解人数限制、退房时间、附加费和重要提醒。"
   },
-  "Nhắn là được hỗ trợ": { ENG: "Message for support", CHN: "发消息即可协助" },
-  "Admin kiểm tra phòng trống, gửi hướng dẫn check-in và xác nhận giá cuối.": {
+  "Xác nhận nhanh": { ENG: "Message for support", CHN: "发消息即可协助" },
+  "Đội ngũ Unite kiểm tra phòng trống, gửi hướng dẫn check-in và xác nhận giá cuối.": {
     ENG: "Admin checks availability, sends check-in guidance and confirms the final rate.",
     CHN: "管理员会确认空房、发送入住指引并确认最终价格。"
   },
 
   "Chọn nhanh theo nhu cầu": { ENG: "Choose by need", CHN: "按需求快速选择" },
-  "Bạn đang cần kiểu stay nào?": { ENG: "What kind of stay do you need?", CHN: "你需要哪种入住体验？" },
-  "Khách mới thường không biết nên bắt đầu từ đâu. Các lựa chọn này dẫn thẳng đến layout phù hợp nhất.": {
+  "Chọn không gian phù hợp": { ENG: "What kind of stay do you need?", CHN: "你需要哪种入住体验？" },
+  "Một vài nhóm lựa chọn giúp hành trình đặt phòng nhanh và rõ hơn.": {
     ENG: "New guests often do not know where to start. These choices lead them straight to the best-fit layout.",
     CHN: "新客人常常不知道从哪里开始，这些选项会直接引导到最合适的房型。"
   },
   "Bồn tắm · Couple": { ENG: "Bathtub · Couple", CHN: "浴缸 · 情侣" },
-  "Muốn một buổi riêng tư có điểm nhấn.": { ENG: "A private stay with a highlight.", CHN: "想要有亮点的私密时光。" },
-  "Gợi ý: ÉLAN Layout, hợp dịp kỷ niệm, nghỉ ngắn hoặc chụp hình lifestyle.": {
+  "Một buổi riêng tư có điểm nhấn.": { ENG: "A private stay with a highlight.", CHN: "想要有亮点的私密时光。" },
+  "ÉLAN Layout phù hợp cho dịp kỷ niệm, nghỉ ngắn hoặc chụp hình lifestyle.": {
     ENG: "Suggestion: ÉLAN Layout, ideal for anniversaries, short rests or lifestyle photos.",
     CHN: "推荐：ÉLAN Layout，适合纪念日、短暂休息或生活方式拍照。"
   },
   "Signature · Cửa vòm": { ENG: "Signature · Arch details", CHN: "招牌 · 拱门设计" },
-  "Muốn phòng đẹp và có gu hơn.": { ENG: "A more stylish, photogenic room.", CHN: "想要更有审美的漂亮房间。" },
-  "Gợi ý: THE ART Layout, nổi bật nhờ đường cong, ánh sáng và bồn tắm rời.": {
+  "Không gian signature nhiều điểm chạm thẩm mỹ.": { ENG: "A more stylish, photogenic room.", CHN: "想要更有审美的漂亮房间。" },
+  "THE ART Layout nổi bật với đường cong, ánh sáng và bồn tắm rời.": {
     ENG: "Suggestion: THE ART Layout, known for curves, light and a freestanding bathtub.",
     CHN: "推荐：THE ART Layout，以曲线、光线和独立浴缸为亮点。"
   },
   "Giá tốt · Gọn sạch": { ENG: "Good value · Compact clean", CHN: "高性价比 · 简洁干净" },
-  "Cần một nơi riêng tư dễ đặt.": { ENG: "A private place that is easy to book.", CHN: "需要一个容易预订的私密空间。" },
-  "Gợi ý: MIDNIGHT Layout, tối giản, tiện và dễ tiếp cận hơn về giá.": {
+  "Không gian riêng tư, gọn sạch và dễ đặt.": { ENG: "A private place that is easy to book.", CHN: "需要一个容易预订的私密空间。" },
+  "MIDNIGHT Layout tối giản, tiện lợi và dễ tiếp cận về giá.": {
     ENG: "Suggestion: MIDNIGHT Layout, minimal, convenient and easier on price.",
     CHN: "推荐：MIDNIGHT Layout，简洁方便，价格更友好。"
   },
   "Tone tối · Private": { ENG: "Dark tone · Private", CHN: "深色调 · 私密" },
-  "Thích không gian trầm và cá tính.": { ENG: "A moody, characterful space.", CHN: "喜欢沉稳且有个性的空间。" },
-  "Gợi ý: NOIR Layout, hợp xem phim, nghỉ vài giờ hoặc một tối yên tĩnh.": {
+  "Tone trầm riêng tư, cá tính.": { ENG: "A moody, characterful space.", CHN: "喜欢沉稳且有个性的空间。" },
+  "NOIR Layout hợp để xem phim, nghỉ vài giờ hoặc tận hưởng một khoảng lặng.": {
     ENG: "Suggestion: NOIR Layout, good for movies, a few quiet hours or a calm evening.",
     CHN: "推荐：NOIR Layout，适合看电影、休息几小时或安静的夜晚。"
   },
@@ -175,16 +192,16 @@ Object.assign(textTranslations, {
   "Mỗi kỳ nghỉ": { ENG: "Every stay", CHN: "每一次入住" },
   "đều xứng đáng": { ENG: "deserves", CHN: "都值得" },
   "được nâng niu.": { ENG: "to feel cared for.", CHN: "被细心呵护。" },
-  "Unite Staycation được tạo nên với mong muốn mang đến một không gian nghỉ ngơi riêng tư,": {
+  "Unite Staycation mang đến những không gian nghỉ ngơi riêng tư,": {
     ENG: "Unite Staycation was created to offer a private place to rest,",
     CHN: "Unite Staycation 希望提供一个私密的休憩空间，"
   },
-  "tinh tế và đầy cảm xúc.": { ENG: "refined and full of feeling.", CHN: "精致且富有情绪感。" },
-  "Từ ánh sáng, nội thất đến từng góc nhỏ trong phòng đều được chăm chút để bạn có thể thư giãn,": {
+  "tinh tế và giàu cảm xúc giữa lòng thành phố.": { ENG: "refined and full of feeling.", CHN: "精致且富有情绪感。" },
+  "Ánh sáng, nội thất và từng góc nhỏ được chăm chút để mỗi kỳ nghỉ trở nên dễ chịu,": {
     ENG: "From lighting and furniture to the smallest corners, everything is curated so you can relax,",
     CHN: "从光线、家具到房间里的每个小角落，都经过用心安排，"
   },
-  "tận hưởng và lưu giữ những khoảnh khắc đáng nhớ bên người mình yêu thương.": {
+  "thoải mái và đáng nhớ hơn.": {
     ENG: "enjoy the moment and keep meaningful memories with someone you love.",
     CHN: "让你放松享受，并与重要的人留下值得记住的时刻。"
   },
@@ -209,12 +226,12 @@ Object.assign(textTranslations, {
   "Booking flow": { VIE: "Quy trình đặt phòng", ENG: "Booking flow", CHN: "预订流程" },
   "Từ xem phòng": { ENG: "From viewing rooms", CHN: "从看房" },
   "đến nhận lịch ở.": { ENG: "to confirming your stay.", CHN: "到确认入住。" },
-  "Unite nên giữ chất riêng tư, mềm và có gu; phần vận hành chỉ cần rõ hơn để khách không bị lạc sau khi xem ảnh và bảng giá.": {
+  "Không gian riêng tư, bảng giá rõ ràng và quy trình đặt phòng được sắp xếp để hành trình lưu trú diễn ra nhẹ nhàng.": {
     ENG: "Unite keeps its private, soft and tasteful character; the operation flow simply needs to be clearer so guests do not get lost after viewing photos and rates.",
     CHN: "Unite 保留私密、柔和且有品味的气质；预订流程只需更清晰，让客人在看完照片和价格后不会迷路。"
   },
   "Chọn vibe phòng": { ENG: "Choose a room vibe", CHN: "选择房间氛围" },
-  "Xem bộ sưu tập, mở chi tiết từng layout và chọn đúng cảm giác muốn ở.": {
+  "Xem bộ sưu tập, mở chi tiết từng layout và chọn đúng không gian phù hợp.": {
     ENG: "View the collection, open each layout detail and choose the feeling you want.",
     CHN: "查看合集，打开每个房型详情，选择你想要的感觉。"
   },
@@ -224,8 +241,8 @@ Object.assign(textTranslations, {
     CHN: "在发消息预订前，可按位置、浴缸、招牌房型或高性价比筛选。"
   },
   "Xác nhận phòng": { ENG: "Confirm the room", CHN: "确认房间" },
-  "Admin kiểm tra lịch trống, giá theo khung giờ và gửi hướng dẫn thanh toán.": {
-    ENG: "Admin checks availability, time-slot pricing and sends payment guidance.",
+  "Đội ngũ Unite kiểm tra lịch trống, giá theo khung giờ và gửi hướng dẫn thanh toán.": {
+    ENG: "The Unite team checks availability, time-slot pricing and sends payment guidance.",
     CHN: "管理员会确认空档、时段价格，并发送付款指引。"
   },
   "Nhận check-in": { ENG: "Receive check-in details", CHN: "接收入住信息" },
@@ -237,8 +254,8 @@ Object.assign(textTranslations, {
   "House Rules": { VIE: "Nội quy lưu trú", ENG: "House Rules", CHN: "入住规则" },
   "Nội quy": { ENG: "Rules", CHN: "规则" },
   "FAQ nhanh": { ENG: "Quick FAQ", CHN: "常见问题" },
-  "Những câu khách thường hỏi trước khi nhắn đặt.": { ENG: "Questions guests often ask before messaging.", CHN: "客人在发消息前常问的问题。" },
-  "Trả lời trước các câu cơ bản giúp khách yên tâm hơn và giảm vòng hỏi qua lại.": {
+  "Câu hỏi thường gặp trước khi đặt phòng.": { ENG: "Questions guests often ask before messaging.", CHN: "客人在发消息前常问的问题。" },
+  "Các thông tin cần biết về sức chứa, giờ lưu trú, phụ thu và nội quy.": {
     ENG: "Answering the basics upfront helps guests feel safer and reduces back-and-forth messages.",
     CHN: "提前回答基础问题，让客人更安心，也减少来回询问。"
   },
@@ -253,8 +270,8 @@ Object.assign(textTranslations, {
     CHN: "每间房建议最多2位客人，以保持私密、干净和舒适。"
   },
   "Làm sao biết còn phòng?": { ENG: "How do I know if a room is available?", CHN: "如何知道是否有房？" },
-  "Khách gửi mã phòng và khung giờ mong muốn. Admin sẽ kiểm tra lịch trống trước khi chốt.": {
-    ENG: "Send the room code and desired time. Admin will check availability before confirming.",
+  "Gửi mã phòng và khung giờ mong muốn, Unite sẽ kiểm tra lịch trống trước khi xác nhận.": {
+    ENG: "Send the room code and preferred time; Unite will check availability before confirming.",
     CHN: "发送房间代码和想要的时间，管理员会先确认空档再最终确认。"
   },
   "Giá trên web có phải giá cuối?": { ENG: "Is the website price final?", CHN: "网站价格是最终价格吗？" },
@@ -268,22 +285,22 @@ Object.assign(textTranslations, {
     CHN: "目前房型位于 Nhiêu Tứ 和 Phan Tây Hồ 分店，均在富润区。"
   },
   "Cần đọc nội quy không?": { ENG: "Should I read the rules?", CHN: "需要阅读规则吗？" },
-  "Nên đọc trước để tránh phụ thu trễ giờ, vượt số khách hoặc phát sinh không mong muốn.": {
+  "Thông tin nội quy giúp hạn chế phát sinh về giờ, số khách hoặc phụ thu.": {
     ENG: "Yes, please read them first to avoid late fees, guest-limit issues or unwanted extra charges.",
     CHN: "建议提前阅读，以避免延时费、超人数或其他不必要费用。"
   },
-  "Phần liên hệ nên là nơi chốt hành động: chọn phòng, xem giá, đọc nội quy và chuyển nhanh qua hub quản trị khi cần cập nhật nội dung.": {
+  "Chọn phòng, xem giá và liên hệ Unite để được xác nhận lịch trống.": {
     ENG: "The contact section should close the action loop: choose a room, view rates, read rules and jump to admin when content needs updating.",
     CHN: "联系区应完成行动闭环：选房、看价格、读规则，并在需要更新内容时快速进入管理页。"
   },
 
   "Room finder": { VIE: "Tìm phòng", ENG: "Room finder", CHN: "房间查找" },
-  "Chọn phòng phù hợp với lịch stay của bạn.": { ENG: "Choose a room that fits your stay schedule.", CHN: "根据你的入住时间选择合适房间。" },
+  "Chọn không gian phù hợp với lịch lưu trú.": { ENG: "Choose a room that fits your stay schedule.", CHN: "根据你的入住时间选择合适房间。" },
   "Đang chuẩn bị danh sách phòng phù hợp.": { ENG: "Preparing matching rooms.", CHN: "正在准备匹配房间。" },
   "Tìm phòng nhanh": { ENG: "Quick room search", CHN: "快速找房" },
   "Tất cả địa điểm": { ENG: "All locations", CHN: "所有位置" },
   "tất cả địa điểm": { ENG: "all locations", CHN: "所有位置" },
-  "Chọn khu stay bạn muốn xem.": { ENG: "Choose the stay area you want to browse.", CHN: "选择你想查看的入住区域。" },
+  "Chọn khu vực lưu trú.": { ENG: "Choose the stay area you want to browse.", CHN: "选择你想查看的入住区域。" },
   "7 layout đang mở": { ENG: "7 open layouts", CHN: "7个可预订房型" },
   "Gần Phan Xích Long": { ENG: "Near Phan Xich Long", CHN: "靠近 Phan Xich Long" },
   "Yên tĩnh, riêng tư": { ENG: "Quiet and private", CHN: "安静私密" },
@@ -306,11 +323,11 @@ Object.assign(textTranslations, {
   "Tối đa 2 khách theo nội quy.": { ENG: "Maximum 2 guests by house rules.", CHN: "根据规则最多2位客人。" },
   "Từ 13 tuổi trở lên": { ENG: "Age 13 and above", CHN: "13岁及以上" },
   "Dưới 13 tuổi": { ENG: "Under 13", CHN: "13岁以下" },
-  "Unite ưu tiên tối đa 2 khách/phòng. Nếu có nhu cầu khác, admin sẽ xác nhận riêng.": {
+  "Mỗi phòng tiêu chuẩn dành cho tối đa 2 khách. Trường hợp đặc biệt sẽ được xác nhận riêng.": {
     ENG: "Unite prioritizes up to 2 guests per room. For special needs, admin will confirm separately.",
     CHN: "Unite 每间房优先最多2位客人。如有特殊需求，管理员会另行确认。"
   },
-  "Danh sách sẽ tự lọc theo thông tin tìm kiếm của bạn.": { ENG: "The list will filter itself by your search details.", CHN: "列表会根据你的搜索信息自动筛选。" },
+  "Danh sách hiển thị theo địa điểm, ngày và gói lưu trú đã chọn.": { ENG: "The list will filter itself by your search details.", CHN: "列表会根据你的搜索信息自动筛选。" },
   "Phú Nhuận": { ENG: "Phu Nhuan", CHN: "富润区" },
   "3 địa điểm · 7 layout": { ENG: "3 locations · 7 layouts", CHN: "3个位置 · 7个房型" },
   "Lọc nhanh": { ENG: "Quick filters", CHN: "快速筛选" },
@@ -324,7 +341,7 @@ Object.assign(textTranslations, {
   "Chọn phòng": { ENG: "Choose room", CHN: "选择房间" },
   "Chỉ từ": { ENG: "From", CHN: "起价" },
   "Giá tham khảo, admin xác nhận lại theo lịch trống.": {
-    ENG: "Reference price. Admin will reconfirm by availability.",
+    ENG: "Reference price. Unite reconfirms by availability.",
     CHN: "参考价格，管理员会根据空档再次确认。"
   },
   "Chưa có phòng phù hợp": { ENG: "No matching rooms yet", CHN: "暂无匹配房间" },
@@ -378,8 +395,8 @@ Object.assign(textTranslations, {
   "Sắp kín": { ENG: "Almost full", CHN: "即将满房" },
   "Tạm khóa": { ENG: "Paused", CHN: "暂时关闭" },
   "Chọn lịch stay": { ENG: "Choose stay details", CHN: "选择入住信息" },
-  "Tối đa 2 khách/phòng. Admin sẽ xác nhận lại lịch trống và giá cuối.": {
-    ENG: "Maximum 2 guests per room. Admin will reconfirm availability and final price.",
+  "Tối đa 2 khách/phòng. Unite sẽ xác nhận lịch trống và giá cuối trước khi chốt.": {
+    ENG: "Maximum 2 guests per room. Unite reconfirms availability and the final rate.",
     CHN: "每间房最多2位客人。管理员会再次确认空档和最终价格。"
   },
   "Xem": { ENG: "View", CHN: "查看" },
@@ -419,11 +436,11 @@ Object.assign(textTranslations, {
     ENG: "Current layouts are available at the Nhieu Tu, Phan Tay Ho and Le Van Si branches, all in Phu Nhuan.",
     CHN: "目前房型位于 Nhiêu Tứ、Phan Tây Hồ 和 Lê Văn Sĩ 分店，均在富润区。"
   },
-  "Unite Staycation được tạo nên với mong muốn mang đến một không gian nghỉ ngơi riêng tư, tinh tế và đầy cảm xúc.": {
+  "Unite Staycation mang đến những không gian nghỉ ngơi riêng tư, tinh tế và giàu cảm xúc giữa lòng thành phố.": {
     ENG: "Unite Staycation was created to offer a private, refined and emotional space to rest.",
     CHN: "Unite Staycation 希望提供一个私密、精致且富有情绪感的休憩空间。"
   },
-  "Từ ánh sáng, nội thất đến từng góc nhỏ trong phòng đều được chăm chút để bạn có thể thư giãn, tận hưởng và lưu giữ những khoảnh khắc đáng nhớ bên người mình yêu thương.": {
+  "Ánh sáng, nội thất và từng góc nhỏ được chăm chút để mỗi kỳ nghỉ trở nên dễ chịu, thoải mái và đáng nhớ hơn.": {
     ENG: "From lighting and furniture to every small corner, each detail is cared for so you can relax, enjoy the moment and keep meaningful memories with someone you love.",
     CHN: "从光线、家具到房间里的每个小角落，都经过细心安排，让你放松享受，并与重要的人留下值得记住的时刻。"
   },
@@ -436,7 +453,7 @@ Object.assign(textTranslations, {
   "Fanpage Tây Hồ": { ENG: "Tay Ho fanpage", CHN: "Tây Hồ 主页" },
   "Chọn kênh liên hệ": { ENG: "Choose a contact channel", CHN: "选择联系渠道" },
   "Nhắn đặt phòng": { ENG: "Message to book", CHN: "咨询预订" },
-  "Web sẽ copy sẵn nội dung phòng khi bạn chọn kênh.": {
+  "Nội dung liên hệ sẽ được chuẩn bị sẵn theo phòng và lịch đã chọn.": {
     ENG: "The site will copy the room details when you choose a channel.",
     CHN: "选择渠道时，网站会自动复制房间咨询内容。"
   },
@@ -445,51 +462,32 @@ Object.assign(textTranslations, {
     CHN: "选择 Zalo、主页、Instagram 或热线发送当前房间信息。"
   },
   "Đã tính theo số đêm đã chọn, admin xác nhận lại lịch trống.": {
-    ENG: "Calculated by selected nights. Admin will reconfirm availability.",
+    ENG: "Calculated by selected nights. Unite reconfirms availability.",
     CHN: "已按所选晚数计算，管理员会再次确认空房。"
   },
-  "Phòng bạn vừa chọn được ưu tiên hiển thị đầu danh sách.": {
+  "Layout đã chọn được ưu tiên hiển thị đầu danh sách.": {
     ENG: "Your selected room is pinned at the top of the list.",
     CHN: "你刚选择的房间会优先显示在列表顶部。"
   }
 });
 
+
 Object.assign(textTranslations, {
-  "nhanh hơn": { ENG: "faster", CHN: "更快捷" },
-  "Đặt phòng nhanh hơn.": { ENG: "Book faster.", CHN: "更快捷地预订。" },
-  "Chọn kênh bạn quen dùng, nội dung phòng và lịch sẽ được chuẩn bị sẵn để gửi cho team.": {
-    ENG: "Choose your preferred channel. Room details and schedule will be prepared for the team.",
-    CHN: "选择你常用的联系渠道，房间信息和入住时间会预先整理好发给团队。"
-  },
-  "Khám phá các layout tại từng chi nhánh, mỗi căn phòng mang một tinh thần riêng: riêng tư, tinh tế và dễ chịu cho từng khoảnh khắc lưu trú.": {
-    ENG: "Explore layouts at each branch. Every room carries its own spirit: private, refined and comfortable for each stay moment.",
-    CHN: "探索各分店的房型，每个房间都有自己的气质：私密、精致、舒适，适合每个入住时刻。"
-  },
-  "Từ xem phòng đến nhận lịch ở.": {
-    ENG: "From viewing rooms to confirming your stay.",
-    CHN: "从看房到确认入住。"
-  },
-  "Unite giữ chất riêng tư, mềm và có gu; phần vận hành chỉ cần đủ rõ để khách không bị lạc sau khi xem ảnh và bảng giá.": {
-    ENG: "Unite keeps its private, soft and tasteful character; the operation flow stays clear so guests do not get lost after viewing photos and rates.",
-    CHN: "Unite 保留私密、柔和且有品味的气质；预订流程保持清晰，让客人在看完照片和价格后不会迷路。"
-  },
-  "Xác nhận lịch": { ENG: "Confirm the schedule", CHN: "确认档期" },
-  "Khách nhận thông tin chi nhánh, nội quy và hướng dẫn trong suốt kỳ ở.": {
-    ENG: "Guests receive branch information, house rules and guidance throughout the stay.",
-    CHN: "客人会收到分店信息、入住规则以及入住期间的指引。"
-  },
-  "Khám phá những căn phòng mang dấu ấn riêng.": {
-    ENG: "Explore rooms with their own character.",
-    CHN: "探索各有独特印记的房间。"
-  },
-  "Mỗi kỳ nghỉ đều xứng đáng được nâng niu.": {
-    ENG: "Every stay deserves to feel cared for.",
-    CHN: "每一次入住都值得被细心呵护。"
-  },
-  "Các không gian lưu trú tại Unite Staycation.": {
-    ENG: "Stay spaces at Unite Staycation.",
-    CHN: "Unite Staycation 的入住空间。"
-  }
+  "được": { ENG: "to", CHN: "" },
+  "nâng niu.": { ENG: "feel cared for.", CHN: "被细心呵护。" },
+  "Mỗi kỳ nghỉ": { ENG: "Every stay", CHN: "每一次入住" },
+  "đều xứng đáng": { ENG: "deserves", CHN: "都值得" },
+  "Nội quy lưu trú": { ENG: "House Rules", CHN: "入住规则" },
+  "House Rules": { VIE: "Nội quy lưu trú", ENG: "House Rules", CHN: "入住规则" },
+  "Thank you for staying with us!": { VIE: "Cảm ơn quý khách đã lưu trú cùng Unite!", ENG: "Thank you for staying with us!", CHN: "感谢入住 Unite!" },
+  "Scroll": { VIE: "Cuộn", ENG: "Scroll", CHN: "下滑" },
+  "Ấm, riêng tư, dễ di chuyển": { ENG: "Warm, private and easy to reach", CHN: "温暖私密，出行方便" },
+  "Chi nhánh Lê Văn Sĩ": { ENG: "Le Van Sy Branch", CHN: "黎文士分店" },
+  "Chi nhánh Nhiêu Tứ": { ENG: "Nhieu Tu Branch", CHN: "Nhiêu Tứ 分店" },
+  "Chi nhánh Phan Tây Hồ": { ENG: "Phan Tay Ho Branch", CHN: "潘西湖分店" },
+  "Xem bộ sưu tập": { ENG: "View collection", CHN: "查看房源" },
+  "Quản trị": { ENG: "Admin", CHN: "管理" },
+  "Liên hệ nhanh": { ENG: "Quick contact", CHN: "快速联系" }
 });
 
 const houseRuleTranslations = {
@@ -531,6 +529,366 @@ const houseRuleTranslations = {
   }
 };
 
+
+
+/* V13 COPY TONE PATCH
+   Customer-facing text is written as hotel/booking UI copy, not internal assistant notes.
+   This override keeps the original layout and only changes wording/translations. */
+Object.assign(textTranslations, {
+  "Chọn địa điểm, ngày và gói lưu trú để xem các layout phù hợp.": {
+    ENG: "Select a location, date and stay package to view suitable layouts.",
+    CHN: "选择位置、日期和入住套餐，查看合适房型。"
+  },
+  "Một chạm riêng tư": {
+    ENG: "A private pause",
+    CHN: "一处私享空间"
+  },
+  "giữa nhịp thành phố.": {
+    ENG: "within the city rhythm.",
+    CHN: "藏在城市节奏里。"
+  },
+  "Các phòng riêng được sắp xếp theo giờ hoặc theo ngày, với hình ảnh, bảng giá và quy trình xác nhận rõ ràng trước khi nhận phòng.": {
+    ENG: "Private rooms are available by the hour or by the day, with clear photos, rates and confirmation before check-in.",
+    CHN: "私密房间可按小时或按天预订，照片、价格与入住确认流程清晰呈现。"
+  },
+  "Chọn theo phong cách": {
+    ENG: "Choose by style",
+    CHN: "按风格选择"
+  },
+  "Mỗi layout mang một chất riêng: bồn tắm, tone tối, cửa vòm, ấm sang hoặc gọn gàng.": {
+    ENG: "Each layout has its own character: bathtub, dark tone, arch details, warm luxury or clean simplicity.",
+    CHN: "每个房型都有独特气质：浴缸、深色调、拱门、温暖高级感或简洁舒适。"
+  },
+  "Bảng giá rõ ràng": {
+    ENG: "Clear rates",
+    CHN: "价格清晰"
+  },
+  "Giá được phân theo 3 giờ, 4 giờ, 8 giờ và theo ngày để dễ lựa chọn.": {
+    ENG: "Rates are grouped by 3 hours, 4 hours, 8 hours and full-day stays for easy comparison.",
+    CHN: "价格按3小时、4小时、8小时与全天分组，方便比较。"
+  },
+  "Nội quy minh bạch": {
+    ENG: "Transparent rules",
+    CHN: "规则透明"
+  },
+  "Thông tin sức chứa, giờ trả phòng và phụ thu được thể hiện trước khi đặt.": {
+    ENG: "Capacity, check-out time and surcharges are shown before booking.",
+    CHN: "人数限制、退房时间与附加费用会在预订前说明。"
+  },
+  "Xác nhận nhanh": {
+    ENG: "Quick confirmation",
+    CHN: "快速确认"
+  },
+  "Đội ngũ Unite kiểm tra phòng trống, gửi hướng dẫn check-in và xác nhận giá cuối.": {
+    ENG: "The Unite team checks availability, sends check-in guidance and confirms the final rate.",
+    CHN: "Unite 团队会确认空房、发送入住指引并确认最终价格。"
+  },
+  "Chọn không gian phù hợp": {
+    ENG: "Find the right space",
+    CHN: "选择合适空间"
+  },
+  "Một vài nhóm lựa chọn giúp hành trình đặt phòng nhanh và rõ hơn.": {
+    ENG: "These curated options make the booking journey quicker and easier to follow.",
+    CHN: "这些精选分类让预订流程更快速、更清晰。"
+  },
+  "Một buổi riêng tư có điểm nhấn.": {
+    ENG: "A private stay with a distinctive touch.",
+    CHN: "一段带有亮点的私密时光。"
+  },
+  "ÉLAN Layout phù hợp cho dịp kỷ niệm, nghỉ ngắn hoặc chụp hình lifestyle.": {
+    ENG: "ÉLAN Layout suits anniversaries, short rests and lifestyle photos.",
+    CHN: "ÉLAN Layout 适合纪念日、短暂休息与生活方式拍摄。"
+  },
+  "Không gian signature nhiều điểm chạm thẩm mỹ.": {
+    ENG: "A signature space with refined visual details.",
+    CHN: "充满美学细节的招牌空间。"
+  },
+  "THE ART Layout nổi bật với đường cong, ánh sáng và bồn tắm rời.": {
+    ENG: "THE ART Layout stands out with curves, natural light and a freestanding bathtub.",
+    CHN: "THE ART Layout 以曲线、光线与独立浴缸为亮点。"
+  },
+  "Không gian riêng tư, gọn sạch và dễ đặt.": {
+    ENG: "A private, clean and easy-to-book space.",
+    CHN: "私密、干净且易于预订的空间。"
+  },
+  "MIDNIGHT Layout tối giản, tiện lợi và dễ tiếp cận về giá.": {
+    ENG: "MIDNIGHT Layout is minimal, convenient and accessible in price.",
+    CHN: "MIDNIGHT Layout 简洁便利，价格更易选择。"
+  },
+  "Tone trầm riêng tư, cá tính.": {
+    ENG: "A moody, private and characterful stay.",
+    CHN: "沉稳、私密且有个性的空间。"
+  },
+  "NOIR Layout hợp để xem phim, nghỉ vài giờ hoặc tận hưởng một khoảng lặng.": {
+    ENG: "NOIR Layout suits movie time, short rests and quiet moments.",
+    CHN: "NOIR Layout 适合看电影、短暂休息或享受安静时刻。"
+  },
+  "Unite Staycation mang đến những không gian nghỉ ngơi riêng tư,": {
+    ENG: "Unite Staycation offers private places to rest,",
+    CHN: "Unite Staycation 提供私密休憩空间，"
+  },
+  "tinh tế và giàu cảm xúc giữa lòng thành phố.": {
+    ENG: "refined and full of feeling in the heart of the city.",
+    CHN: "在城市中心呈现精致且富有情绪感的入住体验。"
+  },
+  "Ánh sáng, nội thất và từng góc nhỏ được chăm chút để mỗi kỳ nghỉ trở nên dễ chịu,": {
+    ENG: "Lighting, furniture and every small corner are thoughtfully arranged so each stay feels calm,",
+    CHN: "光线、家具与每个小角落都经过细心安排，让每一次入住更舒适，"
+  },
+  "thoải mái và đáng nhớ hơn.": {
+    ENG: "comfortable and memorable.",
+    CHN: "更放松，也更值得记住。"
+  },
+  "Không gian riêng tư, bảng giá rõ ràng và quy trình đặt phòng được sắp xếp để hành trình lưu trú diễn ra nhẹ nhàng.": {
+    ENG: "Private spaces, clear rates and an organized booking flow make each stay feel effortless.",
+    CHN: "私密空间、清晰价格与有序预订流程，让入住更轻松。"
+  },
+  "Xem bộ sưu tập, mở chi tiết từng layout và chọn đúng không gian phù hợp.": {
+    ENG: "Explore the collection, open each layout and choose the space that fits.",
+    CHN: "浏览房源合集，查看房型详情，选择合适空间。"
+  },
+  "Câu hỏi thường gặp trước khi đặt phòng.": {
+    ENG: "Frequently asked questions before booking.",
+    CHN: "预订前常见问题。"
+  },
+  "Các thông tin cần biết về sức chứa, giờ lưu trú, phụ thu và nội quy.": {
+    ENG: "Key details about capacity, stay time, surcharges and house rules.",
+    CHN: "关于人数、入住时间、附加费用与规则的重要信息。"
+  },
+  "Gửi mã phòng và khung giờ mong muốn, Unite sẽ kiểm tra lịch trống trước khi xác nhận.": {
+    ENG: "Send the room code and preferred time; Unite will check availability before confirming.",
+    CHN: "发送房间代码与期望时间，Unite 会先确认空房再完成预订。"
+  },
+  "Thông tin nội quy giúp hạn chế phát sinh về giờ, số khách hoặc phụ thu.": {
+    ENG: "House rules help avoid unexpected time, guest-count or surcharge issues.",
+    CHN: "入住规则可避免时间、人数或附加费用方面的临时问题。"
+  },
+  "Chọn phòng, xem giá và liên hệ Unite để được xác nhận lịch trống.": {
+    ENG: "Choose a room, view rates and contact Unite to confirm availability.",
+    CHN: "选择房间、查看价格，并联系 Unite 确认空房。"
+  },
+  "Chọn không gian phù hợp với lịch lưu trú.": {
+    ENG: "Choose a space that fits the stay schedule.",
+    CHN: "根据入住时间选择合适空间。"
+  },
+  "Chọn khu vực lưu trú.": {
+    ENG: "Choose a stay area.",
+    CHN: "选择入住区域。"
+  },
+  "Mỗi phòng tiêu chuẩn dành cho tối đa 2 khách. Trường hợp đặc biệt sẽ được xác nhận riêng.": {
+    ENG: "Each standard room is arranged for up to 2 guests. Special cases are confirmed separately.",
+    CHN: "每间标准房最多安排2位客人。特殊情况将另行确认。"
+  },
+  "Danh sách hiển thị theo địa điểm, ngày và gói lưu trú đã chọn.": {
+    ENG: "The list updates by selected location, date and stay package.",
+    CHN: "列表会根据所选位置、日期与入住套餐更新。"
+  },
+  "Layout đã chọn được ưu tiên hiển thị đầu danh sách.": {
+    ENG: "The selected layout appears first in the list.",
+    CHN: "已选房型会优先显示在列表顶部。"
+  },
+  "Đang xem": {
+    ENG: "Viewing",
+    CHN: "正在查看"
+  },
+  "Nội dung liên hệ sẽ được chuẩn bị sẵn theo phòng và lịch đã chọn.": {
+    ENG: "The contact message is prepared with the selected room and schedule.",
+    CHN: "联系内容会自动带上所选房间与时间。"
+  },
+  "Thông tin trước khi đặt": {
+    ENG: "Before booking",
+    CHN: "预订前信息"
+  },
+  "Chọn gói lưu trú": {
+    ENG: "Choose a stay package",
+    CHN: "选择入住套餐"
+  },
+  "Quy trình đặt phòng rõ ràng.": {
+    ENG: "A clear booking flow.",
+    CHN: "清晰的预订流程。"
+  },
+  "Vị trí và điểm kết nối gần đây.": {
+    ENG: "Location and nearby connections.",
+    CHN: "位置与周边连接。"
+  },
+  "Có thể xem thêm": {
+    ENG: "More to explore",
+    CHN: "更多可选"
+  },
+  "Các layout cùng phong cách.": {
+    ENG: "Other layouts with a similar feel.",
+    CHN: "相近风格的其他房型。"
+  },
+  "Đã cập nhật ngôn ngữ hiển thị.": {
+    ENG: "Display language updated.",
+    CHN: "显示语言已更新。"
+  },
+  "Tối đa 2 khách/phòng. Unite sẽ xác nhận lịch trống và giá cuối trước khi chốt.": {
+    ENG: "Up to 2 guests per room. Unite confirms availability and the final rate before booking.",
+    CHN: "每间房最多2位客人。Unite 会在确认前核对空房与最终价格。"
+  }
+});
+
+
+// V14: Room detail mobile + multilingual copy cleanup.
+// Các key này đặt trước translationLookup để đổi qua lại VI/EN/CN ổn định.
+Object.assign(textTranslations, {
+  "Tổng quan": { ENG: "Overview", CHN: "概览" },
+  "Gói lưu trú": { ENG: "Stay packages", CHN: "套餐" },
+  "Hình ảnh": { ENG: "Photos", CHN: "图片" },
+  "Hướng dẫn": { ENG: "Guide", CHN: "指引" },
+  "FAQ": { ENG: "FAQ", CHN: "FAQ" },
+  "Đánh giá phòng": { ENG: "Room reviews", CHN: "房间评价" },
+  "UNITE PICK": { ENG: "UNITE PICK", CHN: "UNITE 推荐" },
+  "Rất tốt": { ENG: "Very good", CHN: "很不错" },
+  "Rất được yêu thích": { ENG: "Guest favourite", CHN: "人气之选" },
+  "Gọn sạch, dễ đặt": { ENG: "Clean and easy", CHN: "干净好订" },
+  "68 đánh giá": { ENG: "68 reviews", CHN: "68条评价" },
+  "86 đánh giá": { ENG: "86 reviews", CHN: "86条评价" },
+  "41 đánh giá": { ENG: "41 reviews", CHN: "41条评价" },
+  "Sức chứa": { ENG: "Capacity", CHN: "容纳人数" },
+  "Số lượng": { ENG: "Inventory", CHN: "房间数量" },
+  "Trạng thái": { ENG: "Status", CHN: "状态" },
+  "Khung giờ": { ENG: "Time slots", CHN: "时段" },
+  "Check-in": { ENG: "Check-in", CHN: "入住" },
+  "Phụ thu trễ": { ENG: "Late fee", CHN: "延时费" },
+  "Tối đa 2 khách": { ENG: "Up to 2 guests", CHN: "最多2位客人" },
+  "Theo lịch đã đặt": { ENG: "By confirmed booking", CHN: "按预订时间" },
+  "Từ 10 phút": { ENG: "From 10 minutes", CHN: "10分钟起" },
+  "Địa chỉ": { ENG: "Address", CHN: "地址" },
+  "Unite sẽ gửi hướng dẫn check-in chi tiết sau khi xác nhận lịch.": {
+    ENG: "Unite will send detailed check-in instructions after confirmation.",
+    CHN: "确认后，Unite 会发送详细入住指引。"
+  },
+  "Chọn gói lưu trú": { ENG: "Choose package", CHN: "选择套餐" },
+  "Xem hình phòng": { ENG: "View photos", CHN: "查看图片" },
+  "Stay story": { ENG: "Stay story", CHN: "入住氛围" },
+  "Thông tin trước khi đặt": { ENG: "Before booking", CHN: "预订前须知" },
+  "Phù hợp cho": { ENG: "Best for", CHN: "适合" },
+  "Tiện nghi chính": { ENG: "Amenities", CHN: "主要设施" },
+  "Thông tin thường được quan tâm trước khi đến.": {
+    ENG: "Key details guests often check before arrival.",
+    CHN: "到店前常看的重点信息。"
+  },
+  "Gói linh hoạt theo lịch ở.": { ENG: "Flexible packages for your stay.", CHN: "灵活选择入住套餐。" },
+  "Phổ biến": { ENG: "Popular", CHN: "热门" },
+  "Linh hoạt": { ENG: "Flexible", CHN: "灵活" },
+  "Phù hợp cho một buổi nghỉ nhanh, xem phim hoặc đổi không gian.": {
+    ENG: "Good for a quick rest, movie time or a short change of scene.",
+    CHN: "适合短暂休息、看电影或换个空间。"
+  },
+  "Phù hợp cho lịch lưu trú dài hơn, nghỉ ngơi, làm việc nhẹ hoặc chụp hình.": {
+    ENG: "Good for a longer stay, light work, relaxing or taking photos.",
+    CHN: "适合更长时间休息、轻办公或拍照。"
+  },
+  "Giá hiển thị là giá tham khảo. Unite sẽ xác nhận lại theo ngày, khung giờ và tình trạng phòng thực tế.": {
+    ENG: "Displayed rates are for reference. Unite will reconfirm by date, time slot and real availability.",
+    CHN: "页面价格为参考价。Unite 会根据日期、时段与实际房态再次确认。"
+  },
+  "Trước khi đến": { ENG: "Before arrival", CHN: "到店前" },
+  "Quy trình đặt phòng rõ ràng.": { ENG: "A clear booking flow.", CHN: "清晰的预订流程。" },
+  "Chọn gói": { ENG: "Choose a package", CHN: "选择套餐" },
+  "Chọn 3h, 4h, 8h hoặc ngày theo lịch cần nghỉ.": {
+    ENG: "Choose 3h, 4h, 8h or day stay based on your plan.",
+    CHN: "按行程选择3小时、4小时、8小时或按天入住。"
+  },
+  "Nhắn mã phòng": { ENG: "Send room code", CHN: "发送房型编号" },
+  "Xác nhận": { ENG: "Confirm", CHN: "确认" },
+  "Unite gửi giá cuối, giờ nhận phòng và lưu ý thanh toán.": {
+    ENG: "Unite sends the final rate, check-in time and payment notes.",
+    CHN: "Unite 会发送最终价格、入住时间和付款说明。"
+  },
+  "Nhận hướng dẫn": { ENG: "Receive guide", CHN: "接收入住指引" },
+  "Khách nhận địa chỉ, cách vào phòng và nội quy cần biết.": {
+    ENG: "You receive the address, entry guide and key house rules.",
+    CHN: "客人会收到地址、进房方式和必要入住规则。"
+  },
+  "Xung quanh stay": { ENG: "Nearby", CHN: "周边" },
+  "Vị trí và điểm kết nối gần đây.": { ENG: "Location and nearby connections.", CHN: "位置与附近连接点。" },
+  "Guest mood": { ENG: "Guest mood", CHN: "客人反馈" },
+  "Khách thường thích sự riêng tư, ảnh phòng rõ, giá theo khung giờ dễ hiểu và admin xác nhận nhanh trước khi đến. Điểm này là nội dung mô phỏng để tăng độ dễ hiểu cho trang chi tiết.": {
+    ENG: "Guests often like the privacy, clear room photos, simple time-slot pricing and quick confirmation before arrival.",
+    CHN: "客人通常喜欢这里的私密感、清晰房间照片、简单时段价格和到店前快速确认。"
+  },
+  "Câu hỏi thường gặp.": { ENG: "Frequently asked questions.", CHN: "常见问题。" },
+  "Có thể xem thêm": { ENG: "You may also like", CHN: "还可看看" },
+  "Các layout cùng phong cách.": { ENG: "Other layouts with a similar feel.", CHN: "相近风格的其他房型。" },
+  "Đặt phòng": { ENG: "Book", CHN: "预订" },
+  "Room mood": { ENG: "Room mood", CHN: "房间氛围" },
+  "Stay note": { ENG: "Stay note", CHN: "入住提示" },
+  "Có các gói linh hoạt theo từng khung giờ. Vui lòng xác nhận tình trạng phòng trước khi đặt.": {
+    ENG: "Flexible packages are available by time slot. Please confirm availability before booking.",
+    CHN: "可按不同时段灵活选择套餐，预订前请先确认房态。"
+  },
+  "Wi-Fi ổn định": { ENG: "Stable Wi-Fi", CHN: "稳定 Wi‑Fi" },
+  "Máy lạnh riêng": { ENG: "Private air conditioning", CHN: "独立空调" },
+  "Bồn tắm thư giãn": { ENG: "Relaxing bathtub", CHN: "放松浴缸" },
+  "Phòng tắm riêng": { ENG: "Private bathroom", CHN: "独立卫浴" },
+  "Phù hợp xem phim, nghe nhạc, gọi video hoặc làm việc nhẹ.": {
+    ENG: "Good for movies, music, video calls or light work.",
+    CHN: "适合看电影、听音乐、视频通话或轻办公。"
+  },
+  "Không gian riêng tư, dễ chỉnh nhiệt theo nhu cầu.": {
+    ENG: "A private space with easy temperature control.",
+    CHN: "私密空间，可按需求调节温度。"
+  },
+  "Chuẩn bị tốt cho stay couple, sinh nhật hoặc nghỉ ngắn.": {
+    ENG: "Well suited for couple stays, birthdays or short rests.",
+    CHN: "适合情侣入住、生日或短暂休息。"
+  },
+  "Sạch gọn, riêng tư, đủ tiện nghi cơ bản.": {
+    ENG: "Clean, private and equipped with the essentials.",
+    CHN: "干净私密，基础设施齐全。"
+  },
+  "Phù hợp một buổi xem phim, nghỉ ngơi hoặc chill nhẹ.": {
+    ENG: "Good for a movie, a rest or an easy chill session.",
+    CHN: "适合看电影、休息或轻松放空。"
+  },
+  "Hướng dẫn được gửi trước giờ nhận phòng để khách chủ động.": {
+    ENG: "Instructions are sent before check-in so you can arrive smoothly.",
+    CHN: "入住前会发送指引，方便客人主动安排。"
+  },
+  "Unite xác nhận lịch, giá và lưu ý trước khi nhận phòng.": {
+    ENG: "Unite confirms schedule, rate and key notes before arrival.",
+    CHN: "Unite 会在到店前确认时间、价格和注意事项。"
+  },
+  "Couple staycation": { ENG: "Couple staycation", CHN: "情侣 staycation" },
+  "Nghỉ vài giờ": { ENG: "A few-hour rest", CHN: "短时休息" },
+  "Chụp lifestyle": { ENG: "Lifestyle photos", CHN: "生活方式拍照" },
+  "Xem phim riêng tư": { ENG: "Private movie time", CHN: "私密观影" },
+  "Giá dễ tiếp cận": { ENG: "Accessible price", CHN: "价格友好" },
+  "Dịp đặc biệt": { ENG: "Special moments", CHN: "特别时刻" },
+  "Phan Xích Long": { ENG: "Phan Xich Long", CHN: "Phan Xich Long" },
+  "Sân bay Tân Sơn Nhất": { ENG: "Tan Son Nhat Airport", CHN: "新山一机场" },
+  "Trung tâm Quận 1": { ENG: "District 1 center", CHN: "第一郡中心" },
+  "Khu Phan Tây Hồ": { ENG: "Phan Tay Ho area", CHN: "Phan Tây Hồ 区域" },
+  "Trục Hoàng Văn Thụ": { ENG: "Hoang Van Thu axis", CHN: "Hoàng Văn Thụ 主干道" },
+  "Nhiều quán ăn, cafe và tiện mua đồ trước khi check-in.": {
+    ENG: "Many food, coffee and convenience options before check-in.",
+    CHN: "附近有餐饮、咖啡与便利购物选择。"
+  },
+  "Di chuyển thuận tiện cho khách cần nghỉ ngắn trước hoặc sau chuyến bay.": {
+    ENG: "Convenient for a short rest before or after a flight.",
+    CHN: "适合航班前后短暂休息。"
+  },
+  "Phù hợp ghé chơi, chụp hình hoặc ăn tối rồi quay về nghỉ riêng tư.": {
+    ENG: "Good for going out, photos or dinner before returning to a private stay.",
+    CHN: "适合外出、拍照或晚餐后回到私密空间休息。"
+  },
+  "Hẻm yên tĩnh, dễ đặt xe và nhiều lựa chọn ăn uống gần phòng.": {
+    ENG: "Quiet alley, easy ride booking and many nearby food options.",
+    CHN: "安静巷内，叫车方便，附近有多种餐饮选择。"
+  },
+  "Gần cafe, nhà hàng, cửa hàng tiện lợi và các điểm hẹn nhẹ nhàng.": {
+    ENG: "Near cafés, restaurants, convenience stores and easy meeting spots.",
+    CHN: "靠近咖啡馆、餐厅、便利店和轻松约会点。"
+  },
+  "Thuận tiện đi sân bay, Quận 1, Bình Thạnh hoặc Gò Vấp.": {
+    ENG: "Convenient to the airport, District 1, Binh Thanh or Go Vap.",
+    CHN: "前往机场、第一郡、平盛或鹅邑较方便。"
+  }
+});
+
 const languageTextSources = new WeakMap();
 
 const translationLookup = Object.entries(textTranslations).reduce((map, [source, variants]) => {
@@ -548,6 +906,43 @@ const translatePlainText = (source, lang) => {
 
   const exact = textTranslations[source]?.[lang];
   if (exact) return exact;
+
+
+  if (/^Nhắn đặt (.+)$/.test(source)) {
+    const code = source.match(/^Nhắn đặt (.+)$/)[1];
+    return lang === "ENG" ? `Book ${code}` : `咨询 ${code}`;
+  }
+
+  if (/^Gửi mã (.+) để admin kiểm tra tình trạng phòng\.$/.test(source)) {
+    const code = source.match(/^Gửi mã (.+) để admin kiểm tra tình trạng phòng\.$/)[1];
+    return lang === "ENG"
+      ? `Send code ${code} so Unite can check availability.`
+      : `发送编号 ${code}，Unite 将为你确认房态。`;
+  }
+
+  if (/^Đang xem (.+)\. Chọn ngày, gói và số khách để kiểm tra lịch phù hợp\.$/.test(source)) {
+    const code = source.match(/^Đang xem (.+)\. Chọn ngày, gói và số khách để kiểm tra lịch phù hợp\.$/)[1];
+    return lang === "ENG"
+      ? `Viewing ${code}. Choose date, package and guests to check availability.`
+      : `正在查看 ${code}。请选择日期、套餐和人数以确认空档。`;
+  }
+
+  if (/^(.+) images$/.test(source)) {
+    const count = source.match(/^(.+) images$/)[1];
+    return lang === "ENG" ? `${count} images` : `${count} 张图片`;
+  }
+
+  if (/^(\d+) phòng$/.test(source)) {
+    const count = source.match(/^(\d+) phòng$/)[1];
+    return lang === "ENG" ? `${count} rooms` : `${count}间房`;
+  }
+
+  if (/^(.+) là lựa chọn (.+) dành cho những buổi staycation cần không gian đẹp, sạch và có cảm giác tách khỏi nhịp vội bên ngoài\.$/.test(source)) {
+    const [, name] = source.match(/^(.+) là lựa chọn (.+) dành cho những buổi staycation cần không gian đẹp, sạch và có cảm giác tách khỏi nhịp vội bên ngoài\.$/);
+    return lang === "ENG"
+      ? `${name} is a private stay for guests who want a clean, beautiful room and a calm break from the city rhythm.`
+      : `${name} 适合想要干净、好看且能暂时离开城市节奏的私密入住。`;
+  }
 
   const translateDateFragment = (value = "") => {
     const weekdayMap = lang === "ENG"
@@ -671,37 +1066,32 @@ const languageElementTargets = [
   { selector: ".top-nav a[href='admin.html']", text: { VIE: "Quản trị", ENG: "Admin", CHN: "管理" } },
   { selector: ".top-nav a[href='index.html']", text: { VIE: "Trang chính", ENG: "Home", CHN: "首页" } },
   { selector: ".nav-cta", text: { VIE: "Đặt phòng", ENG: "Book", CHN: "预订" } },
-  { selector: ".about-title .keep-phrase:nth-child(1)", text: { VIE: "Mỗi kỳ nghỉ", ENG: "Every stay", CHN: "每一次入住" } },
-  { selector: ".about-title .keep-phrase:nth-child(2)", text: { VIE: "đều xứng đáng", ENG: "deserves", CHN: "都值得" } },
-  { selector: ".about-title .keep-phrase:nth-child(3)", text: { VIE: "được nâng niu", ENG: "to feel cared for", CHN: "被细心呵护" } },
-  { selector: ".reel-title .keep-phrase:nth-child(1)", text: { VIE: "Khám phá những căn phòng", ENG: "Explore rooms", CHN: "探索房间" } },
-  { selector: ".reel-title .keep-phrase:nth-child(2)", text: { VIE: "mang dấu ấn riêng", ENG: "with their own character", CHN: "各有独特印记" } },
-  { selector: ".homes-title .keep-phrase:nth-child(1)", text: { VIE: "Các không gian lưu trú", ENG: "Stay spaces", CHN: "入住空间" } },
-  { selector: ".homes-title .keep-phrase:nth-child(2)", text: { VIE: "tại Unite Staycation", ENG: "at Unite Staycation", CHN: "在 Unite Staycation" } },
-  { selector: "#homes .section-desc", text: { VIE: "Khám phá các layout tại từng chi nhánh, mỗi căn phòng mang một tinh thần riêng: riêng tư, tinh tế và dễ chịu cho từng khoảnh khắc lưu trú.", ENG: "Explore layouts at each branch. Every room carries its own spirit: private, refined and comfortable for each stay moment.", CHN: "探索各分店的房型，每个房间都有自己的气质：私密、精致、舒适，适合每个入住时刻。" } },
-  { selector: ".booking-flow-copy h2", text: { VIE: "Từ xem phòng đến nhận lịch ở.", ENG: "From viewing rooms to confirming your stay.", CHN: "从看房到确认入住。" } },
-  { selector: ".booking-flow-copy p:not(.section-kicker)", text: { VIE: "Unite giữ chất riêng tư, mềm và có gu; phần vận hành chỉ cần đủ rõ để khách không bị lạc sau khi xem ảnh và bảng giá.", ENG: "Unite keeps its private, soft and tasteful character; the operation flow stays clear so guests do not get lost after viewing photos and rates.", CHN: "Unite 保留私密、柔和且有品味的气质；预订流程保持清晰，让客人在看完照片和价格后不会迷路。" } },
-  { selector: ".flow-card:nth-child(1) h3", text: { VIE: "Chọn vibe phòng", ENG: "Choose a room vibe", CHN: "选择房间氛围" } },
-  { selector: ".flow-card:nth-child(1) p", text: { VIE: "Xem bộ sưu tập, mở chi tiết từng layout và chọn đúng cảm giác muốn ở.", ENG: "View the collection, open each layout detail and choose the feeling you want.", CHN: "查看合集，打开每个房型详情，选择你想要的感觉。" } },
-  { selector: ".flow-card:nth-child(2) h3", text: { VIE: "So sánh giá", ENG: "Compare rates", CHN: "比较价格" } },
-  { selector: ".flow-card:nth-child(2) p", text: { VIE: "Lọc theo địa điểm, bồn tắm, signature hoặc giá tốt trước khi nhắn đặt.", ENG: "Filter by location, bathtub, signature style or good value before messaging to book.", CHN: "在发消息预订前，可按位置、浴缸、招牌房型或高性价比筛选。" } },
-  { selector: ".flow-card:nth-child(3) h3", text: { VIE: "Xác nhận lịch", ENG: "Confirm the schedule", CHN: "确认档期" } },
-  { selector: ".flow-card:nth-child(3) p", text: { VIE: "Admin kiểm tra lịch trống, giá theo khung giờ và gửi hướng dẫn thanh toán.", ENG: "Admin checks availability, time-slot pricing and sends payment guidance.", CHN: "管理员会确认空档、时段价格，并发送付款指引。" } },
-  { selector: ".flow-card:nth-child(4) h3", text: { VIE: "Nhận check-in", ENG: "Receive check-in details", CHN: "接收入住信息" } },
-  { selector: ".flow-card:nth-child(4) p", text: { VIE: "Khách nhận thông tin chi nhánh, nội quy và hướng dẫn trong suốt kỳ ở.", ENG: "Guests receive branch information, house rules and guidance throughout the stay.", CHN: "客人会收到分店信息、入住规则以及入住期间的指引。" } },
   { selector: ".contact-copy .section-kicker", text: { VIE: "Liên hệ", ENG: "Contact", CHN: "联系" } },
-  { selector: ".contact-title .keep-phrase:first-child", text: { VIE: "Đặt phòng", ENG: "Book", CHN: "预订" } },
-  { selector: ".contact-title .keep-phrase:nth-child(2) em", text: { VIE: "nhanh hơn", ENG: "faster", CHN: "更快捷" } },
-  { selector: ".contact-copy > p:not(.section-kicker)", text: { VIE: "Chọn kênh bạn quen dùng, nội dung phòng và lịch sẽ được chuẩn bị sẵn để gửi cho team.", ENG: "Choose your preferred channel. Room details and schedule will be prepared for the team.", CHN: "选择你常用的联系渠道，房间信息和入住时间会预先整理好发给团队。" } },
+  { selector: ".contact-title .title-row:first-child", text: { VIE: "Giữ lịch", ENG: "Reserve a", CHN: "预留" } },
+  { selector: ".contact-title .title-row em", text: { VIE: "lưu trú riêng tư.", ENG: "private stay.", CHN: "私享入住。" } },
   { selector: ".floating-contact a[href='#contact']", text: { VIE: "Đặt phòng", ENG: "Book", CHN: "预订" } },
-  { selector: ".floating-contact a[href='#priceList']", text: { VIE: "Xem giá", ENG: "Rates", CHN: "价格" } }
+  { selector: ".floating-contact a[href='#priceList']", text: { VIE: "Xem giá", ENG: "Rates", CHN: "价格" } },
+  { selector: ".about-copy h2.about-title .title-row:nth-child(1)", text: { VIE: "Mỗi kỳ nghỉ", ENG: "Every stay", CHN: "每一次入住" } },
+  { selector: ".about-copy h2.about-title .title-row:nth-child(2)", text: { VIE: "đều xứng đáng", ENG: "deserves", CHN: "都值得" } },
+  { selector: ".about-copy h2.about-title .title-row:nth-child(3)", html: { VIE: "được <em>chăm chút.</em>", ENG: "is <em>thoughtfully prepared.</em>", CHN: "皆被用心准备。" } },
+  { selector: ".rules-card h2.rules-title", html: { VIE: "<span class=\"title-row\">Nội quy</span><span class=\"title-row\">lưu trú</span>", ENG: "<span class=\"title-row\">House</span><span class=\"title-row\">Rules</span>", CHN: "<span class=\"title-row\">入住</span><span class=\"title-row\">规则</span>" } },
+  { selector: ".rules-subtitle", text: { VIE: "House Rules", ENG: "House Rules", CHN: "House Rules" } },
+  { selector: ".thank-you", text: { VIE: "Thank you for staying with us!", ENG: "Thank you for staying with us!", CHN: "感谢入住 Unite!" } }
 ];
+
+const detectSystemLanguage = () => {
+  const raw = String(navigator.language || navigator.userLanguage || "vi").toLowerCase();
+  if (raw.startsWith("zh") || raw.includes("hans") || raw.includes("hant")) return "CHN";
+  if (raw.startsWith("en")) return "ENG";
+  return "VIE";
+};
 
 const getStoredLanguage = () => {
   try {
-    return localStorage.getItem(LANG_STORAGE_KEY) || "VIE";
+    const saved = localStorage.getItem(LANG_STORAGE_KEY);
+    return saved || detectSystemLanguage();
   } catch {
-    return "VIE";
+    return detectSystemLanguage();
   }
 };
 
@@ -716,7 +1106,11 @@ const writeStoredLanguage = (lang) => {
 const applyLanguage = (lang = getStoredLanguage()) => {
   const selected = languageCodes[lang] ? lang : "VIE";
   document.documentElement.lang = languageCodes[selected];
-  document.body.dataset.lang = selected.toLowerCase();
+  if (document.body) {
+    document.body.dataset.lang = selected.toLowerCase();
+    document.body.classList.toggle("is-chinese", selected === "CHN");
+    document.body.classList.toggle("is-english", selected === "ENG");
+  }
 
   const current = $("#languageToggle strong");
   if (current) current.textContent = selected;
@@ -747,9 +1141,13 @@ const applyLanguage = (lang = getStoredLanguage()) => {
     node.nodeValue = original.replace(trimmed, translated);
   });
 
-  languageElementTargets.forEach(({ selector, text }) => {
+  languageElementTargets.forEach(({ selector, text, html }) => {
     $$(selector).forEach(element => {
-      element.textContent = text[selected] || text.VIE || element.textContent;
+      if (html) {
+        element.innerHTML = html[selected] || html.VIE || element.innerHTML;
+        return;
+      }
+      element.textContent = text?.[selected] || text?.VIE || element.textContent;
     });
   });
 };
@@ -889,7 +1287,7 @@ const getContactContext = (overrides = {}) => {
 };
 
 const fillContactTemplate = (template = "", context = getContactContext()) => {
-  const fallback = "Xin chào Unite, mình muốn hỏi phòng {{room}} - {{date}} - {{duration}} - {{guests}}. Link: {{url}}";
+  const fallback = "🔖 [YÊU CẦU ĐẶT PHÒNG]\n- Phòng: {{room}}\n- Chi nhánh: {{destination}}\n- Ngày nhận: {{date}}\n- Gói: {{duration}}\n- Khách: {{guests}}\n\nXin chào Unite, mình muốn đặt phòng này. (Link: {{url}})";
   return (template || fallback).replace(/\{\{(\w+)\}\}/g, (_, key) => context[key] ?? "");
 };
 
@@ -909,6 +1307,25 @@ const channelHref = (channel, message) => {
 const enabledContactChannels = () => readContactChannels().filter(channel => channel.enabled !== false);
 
 const contactChannelHTML = (channel, context, className = "contact-item contact-channel") => {
+  const getChannelIcon = (ch) => {
+    const id = (ch.id || "").toLowerCase();
+    const lbl = (ch.label || "").toLowerCase();
+    
+    if (id.includes('zalo') || id === 'za' || lbl.includes('zalo')) 
+      return `<span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg></span>`;
+    
+    if (id.includes('fanpage') || id.includes('facebook') || id === 'fb' || lbl.includes('fanpage') || lbl.includes('facebook')) 
+      return `<span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"></path></svg></span>`;
+    
+    if (id.includes('instagram') || id === 'ig' || lbl.includes('instagram')) 
+      return `<span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg></span>`;
+    
+    if (id.includes('hotline') || id.includes('phone') || id === 'th' || lbl.includes('hotline') || lbl.includes('sđt') || lbl.includes('phone') || lbl.includes('gọi')) 
+      return `<span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg></span>`;
+    
+    return `<span>${escapeHTML(ch.short || ch.label?.slice(0, 2) || "US")}</span>`;
+  };
+
   const message = fillContactTemplate(channel.template, context);
   const href = channelHref(channel, message);
   const external = !href.startsWith("#") && !href.startsWith("tel:") && !href.startsWith("mailto:");
@@ -919,7 +1336,7 @@ const contactChannelHTML = (channel, context, className = "contact-item contact-
       data-contact-message="${escapeHTML(message)}"
       ${external ? 'target="_blank" rel="noopener"' : ""}
     >
-      <span>${escapeHTML(channel.short || channel.label?.slice(0, 2) || "US")}</span>
+      ${getChannelIcon(channel)}
       <strong>${escapeHTML(channel.label || "Kênh liên hệ")}</strong>
       <small>${escapeHTML(channel.note || "Nhấn để nhắn kèm thông tin phòng đang xem.")}</small>
     </a>
@@ -966,30 +1383,125 @@ const ensureContactModal = () => {
 
   document.body.insertAdjacentHTML("beforeend", `
     <div class="contact-modal-backdrop" id="contactModalBackdrop" aria-hidden="true" onclick="window.uniteCloseContactModal?.()"></div>
-    <section class="contact-modal" id="contactModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="contactModalTitle">
+    <section class="contact-modal" id="contactModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="contactModalTitle" style="max-width: 450px;">
       <button class="contact-modal-close" type="button" data-contact-modal-close aria-label="Đóng" onclick="window.uniteCloseContactModal?.()">×</button>
-      <div class="contact-modal-head">
-        <span>Nhắn đặt phòng</span>
-        <h2 id="contactModalTitle">Chọn kênh liên hệ</h2>
-        <p id="contactModalSummary">Chọn Zalo, Fanpage, Instagram hoặc Hotline để gửi thông tin phòng đang xem.</p>
+      
+      <div class="contact-modal-head" style="margin-bottom: 16px;">
+        <span>Yêu cầu đặt phòng</span>
+        <h2 id="contactModalTitle">Đặt ngay trên web</h2>
+        <p id="contactModalSummary">Điền thông tin để Unite xác nhận lịch trống và giữ phòng cho bạn.</p>
       </div>
-      <div class="contact-modal-grid" id="contactModalChannels"></div>
-      <p class="contact-modal-copy-note">Web sẽ copy sẵn nội dung phòng khi bạn chọn kênh.</p>
+      
+      <form id="customerBookingForm" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+        <input type="text" name="customerName" placeholder="Họ và tên của bạn *" required style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px;">
+        <input type="tel" name="phone" placeholder="Số điện thoại / Zalo *" required style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px;">
+        <textarea name="note" placeholder="Ghi chú thêm (giờ muốn nhận phòng, yêu cầu đặc biệt...)" rows="3" style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px; resize: vertical;"></textarea>
+        <button type="submit" class="btn primary" id="submitCustomerBookingBtn" style="margin-top: 8px; padding: 14px; font-size: 16px; border-radius: 8px;">Gửi yêu cầu đặt phòng</button>
+      </form>
+      
+      <div id="bookingSuccessMsg" style="display: none; background: #e8f5e9; color: #2e7d32; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+        <h3 style="margin: 0 0 8px 0; font-size: 16px;">🎉 Đã gửi yêu cầu!</h3>
+        <p style="margin: 0; font-size: 14px; line-height: 1.5;">Đội ngũ Unite sẽ liên hệ qua Zalo/SĐT của bạn trong ít phút để xác nhận lịch và hỗ trợ giữ phòng.</p>
+      </div>
+
+      <div style="border-top: 1px solid #eaeaea; margin: 0 -24px; padding: 24px 24px 0;">
+        <p style="font-size: 12px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 12px;">Hoặc liên hệ trực tiếp</p>
+        <div class="contact-modal-grid" id="contactModalChannels"></div>
+        <p class="contact-modal-copy-note" style="margin-top: 12px;">Nội dung liên hệ sẽ được chuẩn bị sẵn theo phòng và lịch đã chọn.</p>
+      </div>
     </section>
   `);
 
   modal = $("#contactModal");
   $("#contactModalBackdrop")?.addEventListener("click", closeContactModal);
   $("[data-contact-modal-close]", modal)?.addEventListener("click", closeContactModal);
+  
+  $("#customerBookingForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#submitCustomerBookingBtn");
+    btn.disabled = true;
+    btn.textContent = "Đang gửi...";
+    try {
+      await window.submitCustomerBookingAsync(window.currentBookingContext, e.target);
+      $("#customerBookingForm").style.display = "none";
+      $("#bookingSuccessMsg").style.display = "block";
+    } catch (err) {
+      alert("Có lỗi xảy ra: " + err.message);
+      btn.disabled = false;
+      btn.textContent = "Gửi yêu cầu đặt phòng";
+    }
+  });
+
   return modal;
+};
+
+window.submitCustomerBookingAsync = async (context, form) => {
+  const cfg = window.UNITE_SUPABASE_CONFIG || {};
+  const baseUrl = (cfg.url || "").replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+  const anonKey = cfg.anonKey || cfg.publishableKey;
+  if (!baseUrl || !anonKey) throw new Error("Hệ thống chưa cấu hình kết nối.");
+
+  let checkinAt = new Date().toISOString();
+  let checkoutAt = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+
+  if (context.date) {
+    const d = new Date(context.date + "T14:00:00");
+    if (!Number.isNaN(d.getTime())) {
+      checkinAt = d.toISOString();
+      const out = new Date(d);
+      out.setHours(d.getHours() + 3);
+      checkoutAt = out.toISOString();
+    }
+  }
+
+  const payload = {
+    customer_name: form.customerName.value,
+    customer_phone: form.phone.value,
+    customer_note: form.note.value,
+    status: "new",
+    source_code: "website",
+    package_label: context.duration || "3 tiếng",
+    guests: Number(String(context.guests).match(/\d+/)?.[0] || 2),
+    internal_note: "Phòng: " + context.room + " | Chi nhánh: " + context.destination + " | Khách: " + context.guests,
+    checkin_at: checkinAt,
+    checkout_at: checkoutAt
+  };
+
+  const res = await fetch(`${baseUrl}/rest/v1/bookings`, {
+    method: "POST",
+    headers: {
+      "apikey": anonKey,
+      "Authorization": `Bearer ${anonKey}`,
+      "Content-Type": "application/json",
+      "Prefer": "return=minimal"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || res.statusText);
+  }
 };
 
 const openContactModal = (context = getContactContext()) => {
   const modal = ensureContactModal();
   const backdrop = $("#contactModalBackdrop");
-  const channels = enabledContactChannels();
-  const grid = $("#contactModalChannels");
   const summary = $("#contactModalSummary");
+  const grid = $("#contactModalChannels");
+  
+  const destStr = (context.destination || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const channels = enabledContactChannels().filter(ch => {
+    const lbl = (ch.label || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (destStr && destStr !== "tat ca dia diem") {
+      if (lbl.includes("fanpage") && !lbl.includes("chinh") && lbl !== "fanpage") {
+        return lbl.includes(destStr);
+      }
+    }
+    return true;
+  });
+  
+  window.currentBookingContext = context;
 
   if (summary) {
     summary.textContent = `${context.room} · ${context.destination} · ${context.date} · ${context.duration} · ${context.guests}`;
@@ -999,11 +1511,21 @@ const openContactModal = (context = getContactContext()) => {
     grid.innerHTML = channels.length
       ? channels.map(channel => contactChannelHTML(channel, context, "contact-modal-channel")).join("")
       : `
-        <div class="empty-state contact-empty">
-          <h3>Chưa bật kênh liên hệ</h3>
-          <p>Vào admin để bật Zalo, Fanpage, Instagram hoặc hotline.</p>
+        <div class="empty-state contact-empty" style="margin:0;padding:12px;">
+          <h3 style="margin:0 0 4px;font-size:14px;">Chưa bật kênh liên hệ</h3>
+          <p style="margin:0;font-size:13px;">Vào admin để bật kênh nhắn tin.</p>
         </div>
       `;
+  }
+
+  // Reset form when reopening
+  $("#customerBookingForm").style.display = "flex";
+  $("#customerBookingForm").reset();
+  $("#bookingSuccessMsg").style.display = "none";
+  const btn = $("#submitCustomerBookingBtn");
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = "Gửi yêu cầu đặt phòng";
   }
 
   modal?.classList.add("open");
@@ -1081,19 +1603,7 @@ const statusLabels = {
 
 const readAdminOverrides = () => {
   try {
-    const data = JSON.parse(localStorage.getItem(ADMIN_STORAGE_KEY) || "{}");
-    if (typeof rooms !== "undefined" && data.__inventoryVersion !== ADMIN_INVENTORY_VERSION) {
-      rooms.forEach(room => {
-        const current = data[room.id] || {};
-        data[room.id] = {
-          ...current,
-          inventory: Math.max(0, Number(room.inventory || 3))
-        };
-      });
-      data.__inventoryVersion = ADMIN_INVENTORY_VERSION;
-      writeAdminOverrides(data);
-    }
-    return data;
+    return JSON.parse(localStorage.getItem(ADMIN_STORAGE_KEY) || "{}");
   } catch {
     return {};
   }
@@ -1108,58 +1618,19 @@ const writeAdminOverrides = (data) => {
 };
 
 const defaultRoomAdmin = (room) => ({
-  inventory: Number(room.inventory || 3),
+  inventory: Number(room.inventory || 1),
   status: room.status || "available",
   category: room.category || room.type || "Studio",
   amenities: [...(room.amenities || [])]
 });
 
-const liveRoomAdmin = {};
-
-const hydrateLiveRoomAdmin = async () => {
-  const config = window.UNITE_SUPABASE_CONFIG || {};
-  const key = config.publishableKey || config.anonKey || "";
-  const baseUrl = String(config.url || "").replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
-  if (config.mode !== "supabase" || !baseUrl || !key || key.includes("PASTE_")) return;
-
-  try {
-    const query = new URLSearchParams({
-      select: "code,name,category,status,inventory_count",
-      is_published: "eq.true",
-      order: "sort_order.asc"
-    });
-    const response = await fetch(`${baseUrl}/rest/v1/room_types?${query.toString()}`, {
-      headers: {
-        apikey: key,
-        Authorization: `Bearer ${key}`
-      }
-    });
-    if (!response.ok) return;
-    const rows = await response.json();
-    rows.forEach(row => {
-      liveRoomAdmin[row.code] = {
-        name: row.name,
-        category: row.category,
-        status: row.status,
-        inventory: Math.max(0, Number(row.inventory_count || 0))
-      };
-    });
-  } catch {
-    // Public pages keep the static room data when live inventory is unavailable.
-  }
-};
-
 const getRoomAdmin = (room) => {
   const override = readAdminOverrides()[room.id] || {};
-  const liveOverride = liveRoomAdmin[room.id] || {};
   const defaults = defaultRoomAdmin(room);
-  const localAdminWins = document.body?.dataset.page === "admin";
-  const merged = localAdminWins
-    ? { ...defaults, ...liveOverride, ...override }
-    : { ...defaults, ...override, ...liveOverride };
   return {
-    ...merged,
-    inventory: Math.max(0, Number(merged.inventory ?? 3)),
+    ...defaults,
+    ...override,
+    inventory: Math.max(0, Number(override.inventory ?? defaults.inventory ?? 1)),
     amenities: Array.isArray(override.amenities) ? override.amenities : defaults.amenities
   };
 };
@@ -1247,7 +1718,7 @@ const roomDetailContent = (room) => {
       { label: hasBathtub ? "Bồn tắm thư giãn" : "Phòng tắm riêng", desc: hasBathtub ? "Chuẩn bị tốt cho stay couple, sinh nhật hoặc nghỉ ngắn." : "Sạch gọn, riêng tư, đủ tiện nghi cơ bản." },
       { label: "TV / giải trí", desc: "Phù hợp một buổi xem phim, nghỉ ngơi hoặc chill nhẹ." },
       { label: "Check-in tự túc", desc: "Hướng dẫn được gửi trước giờ nhận phòng để khách chủ động." },
-      { label: "Hỗ trợ nhanh", desc: "Admin xác nhận lịch, giá và lưu ý trước khi khách đến." }
+      { label: "Hỗ trợ nhanh", desc: "Unite xác nhận lịch, giá và lưu ý trước khi nhận phòng." }
     ],
     goodFor: [
       "Couple staycation",
@@ -1257,7 +1728,7 @@ const roomDetailContent = (room) => {
     ],
     facts: [
       { label: "Sức chứa", value: "Tối đa 2 khách" },
-      { label: "Số lượng", value: admin.inventory > 0 ? `${admin.inventory} phòng có thể nhận` : "Hết phòng" },
+      { label: "Số lượng", value: `${admin.inventory} phòng` },
       { label: "Trạng thái", value: statusLabels[admin.status] || "Đang mở" },
       { label: "Khung giờ", value: "3h / 4h / 8h / Ngày" },
       { label: "Check-in", value: "Theo lịch đã đặt" },
@@ -1266,7 +1737,7 @@ const roomDetailContent = (room) => {
     steps: [
       { title: "Chọn gói", desc: "Chọn 3h, 4h, 8h hoặc ngày theo lịch cần nghỉ." },
       { title: "Nhắn mã phòng", desc: `Gửi mã ${room.id} để admin kiểm tra tình trạng phòng.` },
-      { title: "Xác nhận", desc: "Admin gửi giá cuối, giờ nhận phòng và lưu ý thanh toán." },
+      { title: "Xác nhận", desc: "Unite gửi giá cuối, giờ nhận phòng và lưu ý thanh toán." },
       { title: "Nhận hướng dẫn", desc: "Khách nhận địa chỉ, cách vào phòng và nội quy cần biết." }
     ],
     faqs: [
@@ -1291,7 +1762,7 @@ const compactPricesHTML = (room) => `
 const priceHTML = (prices) => prices.map(item => `
   <div class="price-item">
     <span>${item.label}</span>
-    <strong>${item.value}</strong>
+    <strong>${item.originalValue ? `<del>${item.originalValue}</del>` : ""}${item.value}</strong>
   </div>
 `).join("");
 
@@ -1391,6 +1862,7 @@ const roomPreviewHTML = (room, index = 0) => `
     <div class="layout-thumb">
       ${imgTag(getMainImage(room), room.name)}
       <span>${room.chapter}</span>
+      ${promotionBadgeHTML(room)}
     </div>
 
     <div class="layout-info">
@@ -1402,7 +1874,7 @@ const roomPreviewHTML = (room, index = 0) => `
       ${amenityBadgesHTML(room, 4)}
       <div class="layout-meta">
         <span>Từ <strong>${getPrice(room, "3 tiếng")}</strong></span>
-        <span>${getRoomAdmin(room).inventory > 0 ? `${getRoomAdmin(room).inventory} phòng có thể nhận` : "Hết phòng"} · ${statusLabels[getRoomAdmin(room).status] || "Đang mở"}</span>
+        <span>${getRoomAdmin(room).inventory} phòng · ${statusLabels[getRoomAdmin(room).status] || "Đang mở"}</span>
       </div>
     </div>
   </a>
@@ -1436,6 +1908,7 @@ const priceCompareHTML = (room, index = 0) => `
   <article class="price-row reveal-up" style="--delay:${index * 45}ms">
     <a class="price-room" href="room.html?id=${room.id}">
       <img src="${getMainImage(room)}" alt="${room.name}" loading="lazy" />
+      ${promotionBadgeHTML(room)}
       <span>
         <strong>${room.name}</strong>
         <small>${room.id} · ${room.location}</small>
@@ -1462,7 +1935,7 @@ const renderPriceCompare = (list) => {
     grid.innerHTML = `
       <div class="empty-state">
         <h3>Chưa có phòng phù hợp</h3>
-        <p>Hạnh kiểm tra lại bộ lọc hoặc dữ liệu trong rooms.js nha.</p>
+        <p>Thử điều chỉnh bộ lọc hoặc chọn một thời gian khác.</p>
       </div>
     `;
     return;
@@ -1502,17 +1975,19 @@ const initLanguageSwitcher = () => {
       const note = $("#bookingResultNote");
       if (note) {
         note.textContent = lang === "VIE"
-          ? "Đã chọn tiếng Việt. Bạn có thể tiếp tục tìm phòng theo địa điểm, ngày và gói lưu trú."
+          ? "Đã cập nhật ngôn ngữ hiển thị."
           : lang === "ENG"
-            ? "English is on. Booking, contact and key navigation labels have been updated."
-            : "已切换中文。预订、联系和主要导航标签已更新。";
+            ? "Display language updated."
+            : "显示语言已更新。";
       }
 
       close();
     });
   });
 
-  applyLanguage(getStoredLanguage());
+  const initialLang = getStoredLanguage();
+  writeStoredLanguage(initialLang);
+  applyLanguage(initialLang);
 
   document.addEventListener("click", (event) => {
     if (!switcher.contains(event.target)) close();
@@ -1547,7 +2022,7 @@ const bookingWidgetHTML = ({ className = "", buttonText = "Tìm phòng", note = 
       <button type="button" class="booking-trigger" aria-expanded="false">
         <span>Địa điểm</span>
         <strong id="bookingDestinationText">${room ? room.location : "Tất cả địa điểm"}</strong>
-        <small>${room ? `${room.id} · ${room.name}` : "Chọn khu stay bạn muốn xem."}</small>
+        <small>${room ? `${room.id} · ${room.name}` : "Chọn khu vực lưu trú."}</small>
       </button>
       <div class="booking-popover destination-popover" data-booking-panel="destination">
         <button type="button" data-destination="all">Tất cả địa điểm <small>7 layout đang mở</small></button>
@@ -1618,7 +2093,7 @@ const bookingWidgetHTML = ({ className = "", buttonText = "Tìm phòng", note = 
             <button type="button" data-counter="children" data-step="1">+</button>
           </div>
         </div>
-        <p>Unite ưu tiên tối đa 2 khách/phòng. Nếu có nhu cầu khác, admin sẽ xác nhận riêng.</p>
+        <p>Mỗi phòng tiêu chuẩn dành cho tối đa 2 khách. Trường hợp đặc biệt sẽ được xác nhận riêng.</p>
       </div>
     </div>
 
@@ -1882,7 +2357,7 @@ const initHomeBookingWidget = () => {
 
       if (step > 0 && total >= maxGuests) {
         const note = $("#bookingResultNote");
-        if (note) note.textContent = "Unite đang giới hạn tối đa 2 khách/phòng. Nếu cần trường hợp đặc biệt, admin sẽ xác nhận riêng.";
+        if (note) note.textContent = "Mỗi phòng tiêu chuẩn dành cho tối đa 2 khách. Trường hợp đặc biệt sẽ được xác nhận riêng.";
         return;
       }
 
@@ -2036,7 +2511,7 @@ const initSmartBookingDock = () => {
           </label>
         </div>
 
-        <p id="smartBookingHint">Tối đa 2 khách/phòng. Admin sẽ xác nhận lại lịch trống và giá cuối.</p>
+        <p id="smartBookingHint">Tối đa 2 khách/phòng. Unite sẽ xác nhận lịch trống và giá cuối trước khi chốt.</p>
         <button class="btn primary smart-booking-submit" type="submit">Xem phòng phù hợp</button>
       </form>
     </aside>
@@ -2238,7 +2713,6 @@ const roomResultCardHTML = (room, state, index = 0) => {
   const priceNote = isDayStay ? "Đã tính theo số đêm đã chọn, admin xác nhận lại lịch trống." : "Giá tham khảo, admin xác nhận lại theo lịch trống.";
   const isFocused = state.room === room.id;
   const status = statusLabels[admin.status] || "Đang mở";
-  const inventoryText = admin.inventory > 0 ? `${admin.inventory} phòng có thể nhận` : "Hết phòng";
   const detailParams = new URLSearchParams();
   detailParams.set("id", room.id);
   detailParams.set("destination", room.location);
@@ -2256,7 +2730,8 @@ const roomResultCardHTML = (room, state, index = 0) => {
     <article class="room-result-card reveal-up ${isFocused ? "is-focused" : ""}" style="--delay:${index * 35}ms">
       <a class="result-photo" href="${detailHref}">
         ${imgTag(getMainImage(room), room.name)}
-        <span>${isFocused ? "Bạn vừa chọn" : room.priceTier}</span>
+        <span>${isFocused ? "Đang xem" : room.priceTier}</span>
+        ${promotionBadgeHTML(room)}
       </a>
 
       <div class="result-copy">
@@ -2271,7 +2746,7 @@ const roomResultCardHTML = (room, state, index = 0) => {
         <div class="result-tags">
           ${room.tags.slice(0, 4).map(tag => `<span>${tag}</span>`).join("")}
           <span>${admin.category}</span>
-          <span>${inventoryText} · ${status}</span>
+          <span>${admin.inventory} phòng · ${status}</span>
         </div>
       </div>
 
@@ -2299,7 +2774,6 @@ const renderRoomsResults = () => {
   let result = rooms.filter(room => {
     const admin = getRoomAdmin(room);
     if (admin.status === "maintenance") return false;
-    if (admin.inventory <= 0) return false;
     if (state.destination !== "all" && room.location !== state.destination && !room.filters.includes(state.destination)) return false;
     if (state.filters.includes("bathtub") && !room.filters.includes("bathtub")) return false;
     if (state.filters.includes("signature") && !room.filters.includes("signature")) return false;
@@ -2327,7 +2801,7 @@ const renderRoomsResults = () => {
   const checkoutText = state.duration === "Ngày" && checkoutKey ? `, trả ${formatSearchDate(checkoutKey)}` : "";
   const summary = `${result.length} layout phù hợp cho ${place}, nhận ${formatSearchDate(state.date)}${checkoutText}, gói ${stayText}, ${guestCount}.`;
 
-  if (queryText) queryText.textContent = state.room ? `${summary} Phòng bạn vừa chọn được ưu tiên hiển thị đầu danh sách.` : summary;
+  if (queryText) queryText.textContent = state.room ? `${summary} Layout đã chọn được ưu tiên hiển thị đầu danh sách.` : summary;
   if (countText) countText.textContent = `${result.length} lựa chọn`;
   if (note) note.textContent = summary;
 
@@ -2437,7 +2911,7 @@ const renderAdminContactTools = () => {
   const state = $("#adminContactState");
   if (state) {
     const active = channels.filter(channel => channel.enabled !== false).length;
-    state.textContent = `${active}/${channels.length} kênh đang hiển thị ngoài trang chính. Tin nhắn sẽ tự thêm thông tin phòng/ngày/gói/khách.`;
+    state.textContent = `${active}/${channels.length} kênh đang hiển thị ngoài trang chính. Tin nhắn sẽ kèm thông tin phòng, ngày, gói và số khách.`;
   }
 };
 
@@ -2877,7 +3351,7 @@ const renderRoomDetail = () => {
         <div class="address-box">
           <span>Địa chỉ</span>
           <strong>${room.address}</strong>
-          <small>Admin sẽ gửi hướng dẫn check-in chi tiết sau khi xác nhận lịch.</small>
+          <small>Unite sẽ gửi hướng dẫn check-in chi tiết sau khi xác nhận lịch.</small>
         </div>
 
         <div class="detail-actions">
@@ -2917,14 +3391,14 @@ const renderRoomDetail = () => {
     ${bookingWidgetHTML({
       className: "detail-booking-bar reveal-up",
       buttonText: "Đặt phòng",
-      note: `Đang xem ${room.id}. Chọn ngày, gói và khách để mở danh sách phòng phù hợp.`,
+      note: `Đang xem ${room.id}. Chọn ngày, gói và số khách để kiểm tra lịch phù hợp.`,
       room
     })}
 
     <section class="detail-story-grid">
       <article class="detail-story reveal-up">
         <p class="section-kicker">Stay story</p>
-        <h2>Khách cần biết gì trước khi đặt?</h2>
+        <h2>Thông tin trước khi đặt</h2>
         ${detail.intro.map(text => `<p>${text}</p>`).join("")}
       </article>
 
@@ -2939,7 +3413,7 @@ const renderRoomDetail = () => {
     <section class="amenity-section reveal-up">
       <div class="section-line-heading">
         <p class="section-kicker">Tiện nghi chính</p>
-        <h2>Những thứ khách thường hỏi trước khi đến.</h2>
+        <h2>Thông tin thường được quan tâm trước khi đến.</h2>
       </div>
       <div class="amenity-grid">
         ${getRoomAmenities(room).map(item => `
@@ -2954,7 +3428,7 @@ const renderRoomDetail = () => {
 
     <section id="bookingPanel" class="booking-panel reveal-up">
       <div class="section-line-heading">
-        <p class="section-kicker">Chọn gói của bạn</p>
+        <p class="section-kicker">Chọn gói lưu trú</p>
         <h2>Gói linh hoạt theo lịch ở.</h2>
       </div>
       <div class="booking-package-grid">
@@ -2963,18 +3437,18 @@ const renderRoomDetail = () => {
             <span>${index === 0 ? "Phổ biến" : "Linh hoạt"}</span>
             <h3>${item.label}</h3>
             <strong>${item.value}</strong>
-            <p>${index === 0 ? "Hợp cho một buổi nghỉ nhanh, xem phim hoặc đổi không gian." : "Phù hợp khi cần nhiều thời gian hơn để nghỉ, làm việc nhẹ hoặc chụp hình."}</p>
+            <p>${index === 0 ? "Phù hợp cho một buổi nghỉ nhanh, xem phim hoặc đổi không gian." : "Phù hợp cho lịch lưu trú dài hơn, nghỉ ngơi, làm việc nhẹ hoặc chụp hình."}</p>
             <a class="btn soft small" href="#contact" data-contact-popover data-room-id="${room.id}">Nhắn đặt ${room.id}</a>
           </article>
         `).join("")}
       </div>
-      <p class="booking-note">Giá hiển thị là giá tham khảo. Admin sẽ xác nhận lại theo ngày, khung giờ và tình trạng phòng thực tế.</p>
+      <p class="booking-note">Giá hiển thị là giá tham khảo. Unite sẽ xác nhận lại theo ngày, khung giờ và tình trạng phòng thực tế.</p>
     </section>
 
     <section id="guidePanel" class="guide-section reveal-up">
       <div class="section-line-heading">
         <p class="section-kicker">Trước khi đến</p>
-        <h2>Luồng đặt phòng rõ ràng để khách không bị lạc.</h2>
+        <h2>Quy trình đặt phòng rõ ràng.</h2>
       </div>
       <div class="guide-grid">
         ${detail.steps.map((step, index) => `
@@ -2990,7 +3464,7 @@ const renderRoomDetail = () => {
     <section class="nearby-section reveal-up">
       <div class="section-line-heading">
         <p class="section-kicker">Xung quanh stay</p>
-        <h2>Gợi ý nhỏ để khách dễ hình dung vị trí.</h2>
+        <h2>Vị trí và điểm kết nối gần đây.</h2>
       </div>
       <div class="nearby-grid">
         ${detail.nearby.map(item => `
@@ -3014,7 +3488,7 @@ const renderRoomDetail = () => {
     <section id="faqPanel" class="faq-section reveal-up">
       <div class="section-line-heading">
         <p class="section-kicker">FAQ</p>
-        <h2>Câu hỏi khách hay hỏi.</h2>
+        <h2>Câu hỏi thường gặp.</h2>
       </div>
       <div class="faq-list">
         ${detail.faqs.map(item => `
@@ -3028,8 +3502,8 @@ const renderRoomDetail = () => {
 
     <section class="related-section reveal-up">
       <div class="section-line-heading">
-        <p class="section-kicker">Gợi ý dành cho bạn</p>
-        <h2>Những layout khác nên xem thêm.</h2>
+        <p class="section-kicker">Có thể xem thêm</p>
+        <h2>Các layout cùng phong cách.</h2>
       </div>
       <div class="related-grid">
         ${relatedRooms.map(item => `
@@ -3089,6 +3563,83 @@ const bindLightbox = () => {
   });
 };
 
+
+
+// V11: Public live catalogue loader. Giữ nguyên UI, chỉ thay nguồn dữ liệu nếu Supabase đã cấu hình.
+const loadPublicRoomsFromSupabase = async () => {
+  const config = window.UNITE_SUPABASE_CONFIG || {};
+  const baseUrl = String(config.url || "").replace(/\/$/, "");
+  const key = config.anonKey || config.publishableKey || "";
+  if (!baseUrl || !key || baseUrl.includes("PASTE_") || key.includes("PASTE_")) return false;
+  try {
+    const select = [
+      "id","code","name","category","price_tier","vibe","short_line","description","inventory_count","status","is_published","sort_order",
+      "branches(name,area,public_address)",
+      "room_prices(package_label,base_price,sale_price,sort_order,is_active)",
+      "room_images(storage_path,public_url,sort_order,is_cover,is_active)",
+      "promotions(title,discount_percent,discount_amount,badge_label,show_badge,starts_at,ends_at,is_active,created_at)"
+    ].join(",");
+    const query = new URLSearchParams({ select, is_published: "eq.true", order: "sort_order.asc" });
+    const requestHeaders = { apikey: key, Authorization: `Bearer ${key}` };
+    const [response, globalPromoResponse] = await Promise.all([
+      fetch(`${baseUrl}/rest/v1/room_types?${query.toString()}`, { headers: requestHeaders }),
+      fetch(`${baseUrl}/rest/v1/promotions?select=title,discount_percent,discount_amount,badge_label,show_badge,starts_at,ends_at,is_active,created_at&room_type_id=is.null&is_active=eq.true&order=created_at.desc`, { headers: requestHeaders })
+    ]);
+    if (!response.ok) return false;
+    const rows = await response.json();
+    const globalPromotions = globalPromoResponse.ok ? await globalPromoResponse.json() : [];
+    if (!Array.isArray(rows) || !rows.length) return false;
+    const imageUrl = (img) => img.public_url || (img.storage_path ? `${baseUrl}/storage/v1/object/public/${config.roomImageBucket || "room-images"}/${img.storage_path}` : "");
+    const isCurrentPromotion = (promo) => {
+      if (!promo || promo.is_active === false) return false;
+      const now = Date.now();
+      if (promo.starts_at && new Date(promo.starts_at).getTime() > now) return false;
+      if (promo.ends_at && new Date(promo.ends_at).getTime() < now) return false;
+      return true;
+    };
+    rooms = rows.map(row => {
+      const promotion = [...(row.promotions || []), ...(globalPromotions || [])]
+        .filter(isCurrentPromotion)
+        .sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
+      const mappedPrices = (row.room_prices || []).filter(p => p.is_active !== false).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(p => {
+        const base = Number(p.base_price || 0);
+        const displayLabel = ({ day:"Ngày", night:"Qua đêm", "3h":"3 tiếng", "4h":"4 tiếng", "8h":"8 tiếng" })[p.package_code] || p.package_label;
+        let sale = Number(p.sale_price || base);
+        if (promotion?.discount_percent) sale = Math.round(base * (100 - Number(promotion.discount_percent)) / 100);
+        else if (promotion?.discount_amount) sale = Math.max(0, base - Number(promotion.discount_amount));
+        return { label:displayLabel, value:formatKPrice(sale / 1000), originalValue:sale < base ? formatKPrice(base / 1000) : "", basePrice:base, salePrice:sale };
+      });
+      return ({
+      id: row.code,
+      chapter: row.code?.split("-")?.[0]?.replace("C", "Chapter ") || "Chapter",
+      type: "Studio",
+      name: row.name,
+      location: row.branches?.name || "Unite Staycation",
+      district: row.branches?.area || "",
+      address: row.branches?.public_address || row.branches?.name || "",
+      priceTier: row.price_tier || "premium",
+      inventory: Number(row.inventory_count || 0),
+      status: row.status || "available",
+      category: row.category || "Studio",
+      vibe: row.vibe || "Private stay",
+      shortLine: row.short_line || row.vibe || "Private stay",
+      description: row.description || row.short_line || "Không gian lưu trú riêng tư tại Unite Staycation.",
+      prices: mappedPrices,
+      promotion,
+      tags: ["Studio", row.category || "Private", row.price_tier || "Premium"].filter(Boolean),
+      amenities: ["wifi", "aircon", "tv", "self-checkin"],
+      filters: [row.branches?.name, row.branches?.area, row.category, row.price_tier].filter(Boolean),
+      images: (row.room_images || []).filter(img => img.is_active !== false).sort((a,b)=>(b.is_cover===true)-(a.is_cover===true) || (a.sort_order||0)-(b.sort_order||0)).map(imageUrl).filter(Boolean)
+    });
+    });
+    window.rooms = rooms;
+    return true;
+  } catch (error) {
+    console.warn("Public Supabase catalogue fallback to local rooms.js", error);
+    return false;
+  }
+};
+
 const init = async () => {
   initLoader();
   initHeader();
@@ -3099,14 +3650,10 @@ const init = async () => {
   initSmartBookingDock();
   initContactChannels();
 
+  await loadPublicRoomsFromSupabase();
+  syncStaticLiveImages();
+
   const page = document.body.dataset.page;
-  if (page === "admin") {
-    window.UniteOps?.initAuthPanel?.({
-      requiredPermissions: ["manageInventory"],
-      permissionLabel: "Admin hoặc Super admin"
-    });
-  }
-  await hydrateLiveRoomAdmin();
 
   if (page === "home") {
     renderHeroStack();
@@ -3138,6 +3685,4 @@ const init = async () => {
   applyLanguage(getStoredLanguage());
 };
 
-document.addEventListener("DOMContentLoaded", () => {
-  void init();
-});
+document.addEventListener("DOMContentLoaded", init);

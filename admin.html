@@ -3,13 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Admin hub | Unite Staycation</title>
-  <meta name="description" content="Trang quản trị nhanh Unite Staycation." />
+  <title>Quản trị | Unite Staycation</title>
+  <meta name="description" content="Hub quản trị nội dung, hình ảnh, bảng giá và luồng đặt phòng của Unite Staycation." />
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/custom.css?v=ops-v10" />
-  <link rel="stylesheet" href="css/ops.css?v=ops-v11" />
+  <link rel="stylesheet" href="css/custom.css?v=v15" />
+  <link rel="stylesheet" href="css/ops.css?v=v15" />
 </head>
 <body data-page="admin">
+  <div class="page-progress" id="pageProgress"></div>
+
   <header class="site-header" id="siteHeader">
     <a class="brand" href="index.html" aria-label="Unite Staycation">
       <span class="brand-logo"><img src="logo/logo.png" alt="Unite Staycation logo"></span>
@@ -18,107 +20,167 @@
         <small>Admin hub</small>
       </span>
     </a>
-    <nav class="top-nav">
-      <a href="admin-live.html">Admin live</a>
+
+    <nav class="top-nav" style="display:flex;align-items:center;gap:12px;">
+      <a href="admin.html">Admin</a>
       <a href="dashboard.html">Dashboard</a>
       <a href="cskh.html">CSKH</a>
-      <a href="rooms.html">Chọn phòng</a>
-      <a class="nav-cta" href="index.html">Trang chính</a>
+      <button id="bellNotificationBtn" type="button" aria-label="Thông báo đơn mới" style="position:relative;background:none;border:none;cursor:pointer;padding:6px 10px;font-size:20px;line-height:1;color:inherit;border-radius:8px;transition:background 0.2s;display:flex;align-items:center;justify-content:center;" title="Đơn mới đang chờ xử lý">
+        🔔
+        <span id="bellBadge" style="display:none;position:absolute;top:2px;right:2px;background:#e53935;color:#fff;font-size:10px;font-weight:700;border-radius:999px;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 4px;box-shadow:0 1px 4px rgba(0,0,0,.3);">0</span>
+      </button>
     </nav>
   </header>
 
-  <main class="ops-page">
-    <section class="ops-hero">
-      <div>
-        <p class="section-kicker">Admin hub</p>
-        <h1>Điều chỉnh nhanh nội dung web.</h1>
-        <p>Trang này giữ các công cụ quản trị nhẹ trong trình duyệt. Với dữ liệu live, dùng Admin live để đồng bộ Supabase.</p>
+  <main class="admin-page">
+    <section class="admin-hero">
+      <div class="reveal-up">
+        <p class="section-kicker">Admin operations</p>
+        <h1>Quản trị gọn, rõ, không làm mất chất boutique.</h1>
+        <p>
+          Trang này là hub vận hành live: dữ liệu chi nhánh, layout, phòng thật, giá, khuyến mãi, ảnh và tài khoản được cập nhật trực tiếp trên Supabase.
+        </p>
       </div>
-      <div class="ops-actions">
-        <a class="btn primary small" href="admin-live.html">Mở Admin live</a>
-        <button class="btn soft small" type="button" id="adminResetOverrides">Dữ liệu mặc định</button>
-      </div>
+
+      <aside class="admin-status reveal-up">
+        <strong>Cần chú ý</strong>
+        <ul>
+          <li>Logo hiện dùng <b>logo/logo.png</b>.</li>
+          <li>Dữ liệu vận hành chính nằm trên <b>Supabase</b>; <b>js/rooms.js</b> chỉ là dữ liệu dự phòng khi chưa kết nối.</li>
+          <li>Dashboard và CSKH đã có cấu hình Supabase public; đăng nhập email/password để dùng dữ liệu live.</li>
+          <li>Zalo, Fanpage, Instagram và Hotline đã có mặc định thật; có thể chỉnh lại trong Contact channels.</li>
+        </ul>
+      </aside>
     </section>
 
-    <section class="ops-panel auth-panel" id="opsAuthPanel" hidden>
-      <div>
-        <span class="panel-kicker">Supabase auth</span>
-        <h2>Đăng nhập vận hành</h2>
-        <p class="sync-note" id="opsAuthState">Chưa đăng nhập.</p>
-      </div>
-      <form class="auth-form" id="opsLoginForm">
-        <label>Email
-          <input name="email" type="email" autocomplete="username" placeholder="Email admin" required>
-        </label>
-        <label>Mật khẩu
-          <input name="password" type="password" autocomplete="current-password" placeholder="Mật khẩu Supabase" required>
-        </label>
-        <button class="btn primary small" type="submit">Đăng nhập</button>
-      </form>
-      <button class="btn soft small" type="button" id="opsLogoutBtn" hidden>Đăng xuất</button>
-    </section>
+    <div id="adminBookingMount" class="admin-booking-mount"></div>
 
-    <section class="sync-strip">
-      <div>
-        <span class="panel-kicker">Room</span>
-        <p class="sync-note">Chỉnh số lượng phòng, trạng thái và tiện ích hiển thị nhanh.</p>
-      </div>
-      <div>
-        <span class="panel-kicker">Contact</span>
-        <p class="sync-note">Quản lý các kênh liên hệ như Zalo, Fanpage, Instagram, hotline.</p>
-      </div>
-      <div>
-        <span class="panel-kicker">Booking bar</span>
-        <p class="sync-note">Thanh đặt phòng nhanh vẫn có thể mở ngay trên trang quản trị.</p>
-      </div>
-    </section>
-
-    <section class="ops-grid kpi-grid" id="adminMetrics"></section>
-
-    <section class="ops-layout">
-      <article class="ops-panel">
-        <div class="ops-actions" style="justify-content:space-between">
-          <div>
-            <span class="panel-kicker">Room manager</span>
-            <h2>Phòng / layout</h2>
-          </div>
-          <p class="sync-note" id="adminSaveState">Thay đổi sẽ lưu trong trình duyệt.</p>
-        </div>
-        <div class="booking-list" id="adminRoomManager"></div>
-      </article>
-
-      <article class="ops-panel">
-        <span class="panel-kicker">Amenities</span>
-        <h2>Tiện ích</h2>
-        <div class="insight-list" id="adminAmenityCatalog"></div>
-      </article>
-    </section>
-
-    <section class="ops-panel">
-      <div class="ops-actions" style="justify-content:space-between">
+    <section class="admin-console reveal-up legacy-local-admin" aria-label="Quản lý phòng và tiện ích local">
+      <div class="admin-console-head">
         <div>
-          <span class="panel-kicker">Contact channels</span>
-          <h2>Kênh liên hệ</h2>
-          <p class="sync-note" id="adminContactState">Chỉnh kênh liên hệ hiện trên popup đặt phòng.</p>
+          <p class="section-kicker">Room inventory</p>
+          <h2>Quản lý số lượng, dạng phòng và tiện ích hiển thị.</h2>
         </div>
-        <div class="ops-actions">
-          <button class="btn soft small" type="button" id="adminAddContactChannel">Thêm kênh</button>
-          <button class="btn soft small" type="button" id="adminResetContactChannels">Mặc định</button>
-        </div>
+        <button class="btn soft small" type="button" id="adminResetOverrides">Khôi phục mặc định</button>
       </div>
-      <div class="booking-list" id="adminContactManager"></div>
+
+      <div id="adminMetrics" class="admin-metrics" aria-label="Tổng quan dữ liệu phòng"></div>
+      <p id="adminSaveState" class="admin-save-state">Dữ liệu mặc định đang đọc từ js/rooms.js. Khi chỉnh, thay đổi sẽ lưu trong trình duyệt này.</p>
+
+      <div id="adminRoomManager" class="admin-room-manager"></div>
     </section>
 
-    <section class="ops-panel">
-      <span class="panel-kicker">Booking widget</span>
-      <h2>Thanh đặt phòng nhanh</h2>
-      <div id="adminBookingMount"></div>
+    <section class="admin-console admin-contact-console reveal-up legacy-local-admin" aria-label="Quản lý kênh liên hệ local">
+      <div class="admin-console-head">
+        <div>
+          <p class="section-kicker">Contact channels</p>
+          <h2>Quản lý Zalo, Fanpage, Instagram và tin nhắn gửi kèm thông tin phòng.</h2>
+        </div>
+        <div class="admin-console-actions">
+          <button class="btn soft small" type="button" id="adminAddContactChannel">Thêm kênh</button>
+          <button class="btn soft small" type="button" id="adminResetContactChannels">Khôi phục mặc định</button>
+        </div>
+      </div>
+
+      <p id="adminContactState" class="admin-save-state">Các kênh liên hệ sẽ hiển thị tại trang chính và tự tạo nội dung nhắn theo phòng/ngày/gói/khách.</p>
+      <div id="adminContactManager" class="admin-contact-manager"></div>
+    </section>
+
+    <section class="admin-console admin-amenity-console reveal-up legacy-local-admin" aria-label="Danh mục tiện ích local">
+      <div class="admin-console-head">
+        <div>
+          <p class="section-kicker">Amenity icons</p>
+          <h2>Bộ tiện ích chuẩn đang đồng bộ ra web chính.</h2>
+        </div>
+        <a class="btn soft small" href="rooms.html">Xem trang chọn phòng</a>
+      </div>
+      <div id="adminAmenityCatalog" class="admin-amenity-catalog"></div>
+    </section>
+
+    <section class="admin-grid" aria-label="Các khu vực quản trị">
+      <article class="admin-card reveal-up">
+        <span>Dashboard</span>
+        <h2>Doanh thu & KPI</h2>
+        <p>Xem tổng doanh thu, tiền cọc, nguồn booking, hiệu suất chi nhánh, trạng thái pipeline và xuất CSV theo tuần/tháng.</p>
+        <a class="btn soft small" href="dashboard.html">Mở dashboard</a>
+      </article>
+
+      <article class="admin-card reveal-up">
+        <span>CSKH</span>
+        <h2>Bàn xử lý booking</h2>
+        <p>Nhập booking từ web, Zalo, Fanpage, Instagram hoặc OTA; cập nhật cọc, thanh toán, hủy, copy tin nhắn xác nhận cho khách.</p>
+        <a class="btn soft small" href="cskh.html">Mở CSKH</a>
+      </article>
+
+      <article class="admin-card reveal-up">
+        <span>Rooms</span>
+        <h2>Dữ liệu phòng</h2>
+        <p>Quản lý chi nhánh, layout và số lượng từng phòng thật trực tiếp trong bảng Live operations phía trên; mọi máy đăng nhập cùng thấy một nguồn dữ liệu.</p>
+        <a class="btn soft small" href="js/rooms.js">Mở rooms.js</a>
+      </article>
+
+      <article class="admin-card reveal-up">
+        <span>Gallery</span>
+        <h2>Kho ảnh</h2>
+        <p>Ảnh phòng được upload từ Admin lên Supabase Storage; website public tự đọc ảnh live khi đã cấu hình Supabase.</p>
+        <a class="btn soft small" href="img/">Mở thư mục ảnh</a>
+      </article>
+
+      <article class="admin-card reveal-up">
+        <span>Pricing</span>
+        <h2>Bảng giá</h2>
+        <p>Kiểm tra luồng khách thấy giá: filter theo địa điểm, bồn tắm, signature và giá tốt.</p>
+        <a class="btn soft small" href="index.html#priceList">Xem bảng giá</a>
+      </article>
+
+      <article class="admin-card reveal-up">
+        <span>Booking</span>
+        <h2>Supabase + Sheet</h2>
+        <p>Đã cấu hình project Supabase, mẫu Sheet và Apps Script. Cần deploy Apps Script Web App để backup Sheet tự động.</p>
+        <a class="btn soft small" href="START_HERE_HANH.md">Xem hướng dẫn</a>
+      </article>
+
+      <article class="admin-card reveal-up">
+        <span>Brand</span>
+        <h2>Logo</h2>
+        <p>Logo mới đã được đồng bộ vào header, hero, nội quy và hiệu ứng nền cuộn trang.</p>
+        <a class="btn soft small" href="logo/logo.png">Xem logo</a>
+      </article>
+
+      <article class="admin-card reveal-up">
+        <span>Contact</span>
+        <h2>Liên hệ</h2>
+        <p>Khi có Zalo, Facebook, Instagram hoặc hotline thật, thay các link nội bộ bằng link vận hành chính thức.</p>
+        <a class="btn soft small" href="index.html#contact">Xem contact</a>
+      </article>
+
+      <article class="admin-card reveal-up">
+        <span>System</span>
+        <h2>Sức khỏe Server</h2>
+        <p id="healthStatusText" style="font-size:13px;color:#666;line-height:1.4;">Kiểm tra độ trễ (Ping) và mức sử dụng dung lượng Storage (Bill & Ảnh) của Supabase.</p>
+        <button class="btn soft small" onclick="window.checkSupabaseHealth(this)" style="cursor:pointer;border:none;">Kiểm tra ngay</button>
+      </article>
     </section>
   </main>
 
-  <script src="js/supabase-config.js?v=ops-v10"></script>
-  <script src="js/ops-data.js?v=ops-v11"></script>
-  <script src="js/rooms.js?v=ops-v10"></script>
-  <script src="js/app.js?v=ops-v11"></script>
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <p>© Unite Staycation · Admin hub</p>
+      <nav class="footer-links" aria-label="Footer links">
+        <a href="index.html">Trang chính</a>
+        <a href="index.html#priceList">Bảng giá</a>
+        <a href="index.html#rules">Nội quy</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="js/supabase-config.js?v=v15"></script>
+  <script src="js/auth-guard.js?v=v15"></script>
+  <script src="js/rooms.js?v=v15"></script>
+  <script src="js/ops-data.js?v=v15"></script>
+  <script src="js/admin-live.js?v=v15"></script>
+  <script src="js/app.js?v=v15"></script>
+  <script src="js/luxury-effects.js?v=v15"></script>
+<script src="js/admin-unified.js?v=v15"></script>
 </body>
 </html>

@@ -1,161 +1,99 @@
-const SPREADSHEET_ID = '1sd9TKGa2v-6KJWzFjPLGXJ2aOTPXCZdi-ExnkNGrsUM';
-const SHEET_NAME = 'Bookings';
+// Unite Staycation V15 Google Sheet Backup
+// Script Properties bắt buộc: SUPABASE_URL, SUPABASE_ANON_KEY
+// Deploy: Web app > Execute as Me > Anyone with link.
+// Mỗi request phải mang Supabase access token hợp lệ và role vận hành.
 
+const SHEET_NAME = 'Bookings';
+const ALLOWED_ROLES = ['super_admin', 'admin', 'cskh', 'accountant'];
 const HEADERS = [
-  'id',
-  'createdAt',
-  'updatedAt',
-  'stayDate',
-  'checkoutDate',
-  'startTime',
-  'endTime',
-  'branch',
-  'roomId',
-  'roomName',
-  'customerName',
-  'phone',
-  'email',
-  'source',
-  'status',
-  'packageLabel',
-  'nights',
-  'guests',
-  'total',
-  'deposit',
-  'paid',
-  'balance',
-  'paymentMethod',
-  'assignedTo',
-  'note',
-  'billName',
-  'billUploadedAt',
-  'billUrl',
-  'payments',
-  'externalRef',
-  'supabaseUpdatedAt',
-  'sheetSyncedAt'
+  'id','createdAt','updatedAt','checkinAt','checkoutAt','branch','roomId','roomName','roomUnitCode','roomUnitName',
+  'customerName','phone','email','source','status','packageLabel','guests','total','deposit','paid','balance',
+  'paymentMethod','assignedTo','note','externalRef','depositBillUrl','fullPaymentBillUrl','depositBillPath','fullPaymentBillPath','sheetSyncedAt'
 ];
 
-function doGet(e) {
-  const action = String((e && e.parameter && e.parameter.action) || 'ping');
-  const callback = e && e.parameter && e.parameter.callback;
-
-  if (action === 'ping') {
-    return jsonOutput({ ok: true, message: 'Unite Staycation Sheet API is live.' }, callback);
-  }
-
-  if (action === 'schema') {
-    return jsonOutput({ ok: true, headers: HEADERS }, callback);
-  }
-
-  if (action === 'list') {
-    const sheet = getBookingSheet_();
-    return jsonOutput({ ok: true, rows: readRows_(sheet) }, callback);
-  }
-
-  return jsonOutput({ ok: false, error: `Unknown action: ${action}` }, callback);
-}
-
 function doPost(e) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-
   try {
-    const payload = parsePayload_(e);
-    const action = String(payload.action || 'upsert');
-    const sheet = getBookingSheet_();
+    const body = JSON.parse(e.postData && e.postData.contents ? e.postData.contents : '{}');
+    const auth = verifySupabaseUser_(body.accessToken || '');
+    if (!auth.ok) return json_({ ok: false, error: auth.error || 'Unauthorized' });
 
-    if (action === 'append') {
-      const row = normalizeRow_(payload.booking || payload);
-      sheet.appendRow(HEADERS.map(header => row[header] || ''));
-      return jsonOutput({ ok: true, action, id: row.id });
+    const booking = sanitizeBooking_(body.booking || {});
+    if (!booking.id) return json_({ ok: false, error: 'Thiếu booking.id' });
+
+    const sheet = getSheet_();
+    upsertBooking_(sheet, booking);
+    return json_({ ok: true, role: auth.role });
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message ? err.message : err) });
+  }
+}
+
+function verifySupabaseUser_(accessToken) {
+  if (!accessToken) return { ok: false, error: 'Thiếu access token' };
+  const props = PropertiesService.getScriptProperties();
+  const baseUrl = String(props.getProperty('SUPABASE_URL') || '').replace(/\/$/, '');
+  const anonKey = props.getProperty('SUPABASE_ANON_KEY') || '';
+  if (!baseUrl || !anonKey) return { ok: false, error: 'Apps Script chưa có SUPABASE_URL/SUPABASE_ANON_KEY' };
+
+  const commonHeaders = { apikey: anonKey, Authorization: 'Bearer ' + accessToken };
+  const userRes = UrlFetchApp.fetch(baseUrl + '/auth/v1/user', {
+    method: 'get', headers: commonHeaders, muteHttpExceptions: true
+  });
+  if (userRes.getResponseCode() !== 200) return { ok: false, error: 'Supabase token không hợp lệ hoặc đã hết hạn' };
+  const user = JSON.parse(userRes.getContentText() || '{}');
+  if (!user.id) return { ok: false, error: 'Không xác định được user' };
+
+  const profileUrl = baseUrl + '/rest/v1/app_profiles?select=role,is_active&user_id=eq.' + encodeURIComponent(user.id) + '&limit=1';
+  const profileRes = UrlFetchApp.fetch(profileUrl, {
+    method: 'get', headers: commonHeaders, muteHttpExceptions: true
+  });
+  if (profileRes.getResponseCode() !== 200) return { ok: false, error: 'Không đọc được app_profiles' };
+  const rows = JSON.parse(profileRes.getContentText() || '[]');
+  const profile = rows[0];
+  if (!profile || profile.is_active !== true || ALLOWED_ROLES.indexOf(profile.role) < 0) {
+    return { ok: false, error: 'Tài khoản chưa có quyền vận hành' };
+  }
+  return { ok: true, role: profile.role, userId: user.id };
+}
+
+function sanitizeBooking_(booking) {
+  const clean = {};
+  HEADERS.forEach(function (key) {
+    const value = booking[key];
+    let text = value === undefined || value === null ? '' : String(value).slice(0, 5000);
+    // Chặn spreadsheet-formula injection từ tên khách, ghi chú hoặc dữ liệu OTA.
+    if (/^[=+\-@]/.test(text.trimStart())) text = "'" + text;
+    clean[key] = text;
+  });
+  return clean;
+}
+
+function getSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh) sh = ss.insertSheet(SHEET_NAME);
+  const current = sh.getRange(1, 1, 1, HEADERS.length).getValues()[0];
+  if (current.join('') === '' || current[0] !== HEADERS[0]) {
+    sh.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function upsertBooking_(sheet, booking) {
+  const data = sheet.getDataRange().getValues();
+  let targetRow = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(booking.id || '')) {
+      targetRow = i + 1;
+      break;
     }
-
-    if (action === 'upsert') {
-      const row = normalizeRow_(payload.booking || payload);
-      const rowIndex = findRowById_(sheet, row.id);
-      const values = HEADERS.map(header => row[header] || '');
-
-      if (rowIndex > 0) {
-        sheet.getRange(rowIndex, 1, 1, HEADERS.length).setValues([values]);
-        return jsonOutput({ ok: true, action, mode: 'updated', id: row.id, rowIndex });
-      }
-
-      sheet.appendRow(values);
-      return jsonOutput({ ok: true, action, mode: 'inserted', id: row.id, rowIndex: sheet.getLastRow() });
-    }
-
-    return jsonOutput({ ok: false, error: `Unknown action: ${action}` });
-  } catch (error) {
-    return jsonOutput({ ok: false, error: String(error && error.message ? error.message : error) });
-  } finally {
-    lock.releaseLock();
   }
+  const row = HEADERS.map(function (h) { return booking[h] === undefined ? '' : booking[h]; });
+  if (targetRow > 0) sheet.getRange(targetRow, 1, 1, HEADERS.length).setValues([row]);
+  else sheet.appendRow(row);
 }
 
-function getBookingSheet_() {
-  const ss = SPREADSHEET_ID
-    ? SpreadsheetApp.openById(SPREADSHEET_ID)
-    : SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_NAME);
-  if (!sheet) sheet = ss.insertSheet(SHEET_NAME);
-
-  const current = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), HEADERS.length)).getValues()[0];
-  const missingHeader = HEADERS.some((header, index) => current[index] !== header);
-  if (missingHeader) {
-    sheet.clear();
-    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-    sheet.setFrozenRows(1);
-  }
-
-  return sheet;
-}
-
-function readRows_(sheet) {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-
-  const values = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
-  return values
-    .filter(row => row.some(cell => cell !== ''))
-    .map(row => HEADERS.reduce((item, header, index) => {
-      item[header] = row[index];
-      return item;
-    }, {}));
-}
-
-function normalizeRow_(source) {
-  const now = new Date().toISOString();
-  const row = {};
-  HEADERS.forEach(header => row[header] = source[header] == null ? '' : source[header]);
-  if (!row.id) row.id = `US-${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd')}-${Utilities.getUuid().slice(0, 6).toUpperCase()}`;
-  if (!row.createdAt) row.createdAt = now;
-  row.updatedAt = row.updatedAt || now;
-  row.sheetSyncedAt = now;
-  return row;
-}
-
-function findRowById_(sheet, id) {
-  if (!id || sheet.getLastRow() < 2) return -1;
-  const ids = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
-  const found = ids.findIndex(row => String(row[0]) === String(id));
-  return found >= 0 ? found + 2 : -1;
-}
-
-function parsePayload_(e) {
-  if (!e || !e.postData || !e.postData.contents) return {};
-  return JSON.parse(e.postData.contents);
-}
-
-function jsonOutput(data, callback) {
-  const json = JSON.stringify(data);
-  if (callback) {
-    return ContentService
-      .createTextOutput(`${callback}(${json});`)
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-
-  return ContentService
-    .createTextOutput(json)
-    .setMimeType(ContentService.MimeType.JSON);
+function json_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }

@@ -6,7 +6,7 @@
   <title>Chọn phòng | Unite Staycation</title>
   <meta name="description" content="Chọn phòng Unite Staycation theo địa điểm, ngày, gói lưu trú và số khách." />
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/custom.css?v=ops-v7" />
+  <link rel="stylesheet" href="css/custom.css?v=v15" />
 </head>
 <body data-page="rooms">
   <div class="page-progress" id="pageProgress"></div>
@@ -19,6 +19,7 @@
         <small>Choose your stay</small>
       </span>
     </a>
+
     <nav class="top-nav">
       <a href="index.html#about">Về Unite</a>
       <a href="index.html#roomReel">Bộ sưu tập</a>
@@ -28,16 +29,17 @@
       <a href="index.html#bookingFlow">Cách đặt</a>
       <a class="nav-cta" href="rooms.html">Đặt phòng</a>
     </nav>
+
     <div class="header-tools" aria-label="Công cụ nhanh">
       <button class="tool-icon" type="button" aria-label="Liên hệ nhanh">☎</button>
       <div class="language-switcher" id="languageSwitcher">
         <button class="language-current" type="button" id="languageToggle" aria-expanded="false">
-          <span>•</span><strong>VIE</strong>
+          <span>●</span><strong>VIE</strong>
         </button>
         <div class="language-menu" id="languageMenu" aria-label="Chọn ngôn ngữ">
-          <button type="button" data-lang="ENG"><span>•</span> ENG</button>
-          <button type="button" data-lang="VIE" class="active"><span>•</span> VIE</button>
-          <button type="button" data-lang="CHN"><span>•</span> CHN</button>
+          <button type="button" data-lang="ENG"><span>●</span> ENG</button>
+          <button type="button" data-lang="VIE" class="active"><span>●</span> VIE</button>
+          <button type="button" data-lang="CHN"><span>●</span> CHN</button>
         </div>
       </div>
     </div>
@@ -46,7 +48,7 @@
   <main class="rooms-results-page">
     <section class="results-hero">
       <p class="section-kicker">Room finder</p>
-      <h1>Chọn phòng phù hợp với lịch stay của bạn.</h1>
+      <h1>Chọn không gian phù hợp với lịch lưu trú.</h1>
       <p id="roomsResultQuery">Đang chuẩn bị danh sách phòng phù hợp.</p>
     </section>
 
@@ -55,13 +57,13 @@
         <button type="button" class="booking-trigger" aria-expanded="false">
           <span>Địa điểm</span>
           <strong id="bookingDestinationText">Tất cả địa điểm</strong>
-          <small>Chọn khu stay bạn muốn xem.</small>
+          <small>Chọn khu vực lưu trú.</small>
         </button>
         <div class="booking-popover destination-popover" data-booking-panel="destination">
           <button type="button" data-destination="all" class="active">Tất cả địa điểm <small>7 layout đang mở</small></button>
-          <button type="button" data-destination="Chi nhánh Nhiêu Tứ">Chi nhánh Nhiêu Tứ <small>ÉLAN, NOIR</small></button>
-          <button type="button" data-destination="Chi nhánh Phan Tây Hồ">Chi nhánh Phan Tây Hồ <small>THE ART, VELVET, MIDNIGHT</small></button>
-          <button type="button" data-destination="Chi nhánh Lê Văn Sĩ">Chi nhánh Lê Văn Sĩ <small>Amor, Roma</small></button>
+          <button type="button" data-destination="Chi nhánh Nhiêu Tứ">Chi nhánh Nhiêu Tứ <small>Gần Phan Xích Long</small></button>
+          <button type="button" data-destination="Chi nhánh Phan Tây Hồ">Chi nhánh Phan Tây Hồ <small>Yên tĩnh, riêng tư</small></button>
+          <button type="button" data-destination="Chi nhánh Lê Văn Sĩ">Chi nhánh Lê Văn Sĩ <small>Ấm, riêng tư, dễ di chuyển</small></button>
         </div>
       </div>
 
@@ -126,22 +128,25 @@
               <button type="button" data-counter="children" data-step="1">+</button>
             </div>
           </div>
-          <p>Unite ưu tiên tối đa 2 khách/phòng. Nếu có nhu cầu khác, admin sẽ xác nhận riêng.</p>
+          <p>Mỗi phòng tiêu chuẩn dành cho tối đa 2 khách. Trường hợp đặc biệt sẽ được xác nhận riêng.</p>
         </div>
       </div>
 
       <button class="btn primary booking-search-btn" type="button" id="bookingSearchBtn">Cập nhật</button>
     </section>
 
-    <div class="booking-result-note" id="bookingResultNote" aria-live="polite">Danh sách sẽ tự lọc theo thông tin tìm kiếm của bạn.</div>
+    <div class="booking-result-note" id="bookingResultNote" aria-live="polite">
+      Danh sách hiển thị theo địa điểm, ngày và gói lưu trú đã chọn.
+    </div>
 
     <section class="results-layout">
       <aside class="results-sidebar reveal-up" aria-label="Bộ lọc nhanh">
         <div class="result-map-card">
           <span>US</span>
           <strong>Phú Nhuận</strong>
-          <small>3 chi nhánh · 7 layout</small>
+          <small>3 địa điểm · 7 layout</small>
         </div>
+
         <div class="filter-panel">
           <h2>Lọc nhanh</h2>
           <label><input type="checkbox" data-result-filter="bathtub"> Có bồn tắm</label>
@@ -149,6 +154,7 @@
           <label><input type="checkbox" data-result-filter="budget"> Giá tốt</label>
           <label><input type="checkbox" data-result-filter="available"> Đang mở</label>
         </div>
+
         <div class="filter-panel">
           <h2>Tiện ích nổi bật</h2>
           <div id="resultsAmenitySummary" class="results-amenity-summary"></div>
@@ -167,14 +173,26 @@
             <option value="price-desc">Giá cao đến thấp</option>
           </select>
         </div>
+
         <div id="roomsResultList" class="room-result-list" aria-live="polite"></div>
       </section>
     </section>
   </main>
 
-  <script src="js/supabase-config.js?v=ops-v7"></script>
-  <script src="js/rooms.js?v=ops-v7"></script>
-  <script src="js/app.js?v=ops-v11"></script>
-  <script src="js/luxury-effects.js"></script>
+  <footer class="site-footer">
+    <div class="footer-grid">
+      <p>© Unite Staycation · Chọn phòng</p>
+      <nav class="footer-links" aria-label="Footer links">
+        <a href="index.html">Trang chính</a>
+        <a href="index.html#priceList">Bảng giá</a>
+
+      </nav>
+    </div>
+  </footer>
+
+  <script src="js/supabase-config.js?v=v15"></script>
+  <script src="js/rooms.js?v=v15"></script>
+  <script src="js/app.js?v=v15"></script>
+  <script src="js/luxury-effects.js?v=v15"></script>
 </body>
 </html>

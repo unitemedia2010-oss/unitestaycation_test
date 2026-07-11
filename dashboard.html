@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Dashboard doanh thu | Unite Staycation</title>
-  <meta name="description" content="Bảng điều khiển doanh thu, booking, nguồn khách và hiệu suất chi nhánh Unite Staycation." />
+  <meta name="description" content="Bảng điều khiển doanh thu, booking, nguồn khách và hiệu suất chi nhánh của Unite Staycation." />
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/custom.css?v=ops-v10" />
-  <link rel="stylesheet" href="css/ops.css?v=ops-v11" />
+  <link rel="stylesheet" href="css/custom.css?v=v15" />
+  <link rel="stylesheet" href="css/ops.css?v=v15" />
 </head>
 <body data-page="dashboard">
   <header class="site-header" id="siteHeader">
@@ -15,175 +15,71 @@
       <span class="brand-logo"><img src="logo/logo.png" alt="Unite Staycation logo"></span>
       <span class="brand-copy">
         <strong>Unite Staycation</strong>
-        <small>Revenue dashboard</small>
+        <small>Admin hub</small>
       </span>
     </a>
 
-    <nav class="top-nav">
-      <a href="admin-live.html">Admin live</a>
+    <nav class="top-nav" style="display:flex;align-items:center;gap:12px;">
+      <a href="admin.html">Admin</a>
+      <a href="dashboard.html">Dashboard</a>
       <a href="cskh.html">CSKH</a>
-      <a href="rooms.html">Chọn phòng</a>
-      <a href="index.html#priceList">Bảng giá</a>
-      <a class="nav-cta" href="index.html">Trang chính</a>
+      <button id="bellNotificationBtn" type="button" aria-label="Thông báo đơn mới" style="position:relative;background:none;border:none;cursor:pointer;padding:6px 10px;font-size:20px;line-height:1;color:inherit;border-radius:8px;transition:background 0.2s;display:flex;align-items:center;justify-content:center;" title="Đơn mới đang chờ xử lý">
+        🔔
+        <span id="bellBadge" style="display:none;position:absolute;top:2px;right:2px;background:#e53935;color:#fff;font-size:10px;font-weight:700;border-radius:999px;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 4px;box-shadow:0 1px 4px rgba(0,0,0,.3);">0</span>
+      </button>
     </nav>
   </header>
 
   <main class="ops-page">
     <section class="ops-hero">
-      <div>
-        <p class="section-kicker">Dashboard</p>
-        <h1>Tổng quan doanh thu và vận hành.</h1>
-        <p>Theo dõi booking, doanh thu, tiền cọc, nguồn khách, hiệu suất chi nhánh, lịch sắp check-in/check-out và cảnh báo cần xử lý.</p>
-      </div>
-      <div class="ops-actions">
-        <label class="file-action">
-          <input id="dashboardImportFile" type="file" accept=".csv,.json">
-          <span class="btn soft small">Nhập CSV</span>
-        </label>
-        <button class="btn soft small" type="button" id="dashboardExport">Xuất CSV</button>
-        <button class="btn soft small" type="button" id="dashboardSyncSheet">Sync Sheet</button>
-        <button class="btn soft small" type="button" id="dashboardPullSheet">Nhập từ Sheet</button>
-      </div>
+      <div><p class="section-kicker">Dashboard</p><h1>Báo cáo doanh thu toàn diện.</h1><p>Thống kê theo ngày/tuần/tháng/năm, biểu đồ nguồn khách, hiệu suất phòng, phòng căng lịch, phòng yếu cần xử lý và báo cáo có thể xuất CSV.</p></div>
+      <div class="ops-actions"><button class="btn soft small" type="button" id="dashboardExport">Xuất CSV</button><button class="btn soft small" type="button" id="dashboardSyncSheet">Sync Sheet</button><button class="btn soft small" type="button" id="dashboardReload">Tải Supabase</button></div>
     </section>
 
     <section class="sync-strip" aria-label="Trạng thái đồng bộ">
-      <div>
-        <span class="panel-kicker">Supabase</span>
-        <p class="sync-note" id="supabaseSyncState">Đang kiểm tra dữ liệu Supabase.</p>
-      </div>
-      <div>
-        <span class="panel-kicker">Google Sheet backup</span>
-        <p class="sync-note" id="sheetSyncState">Sẵn sàng đồng bộ khi có Apps Script endpoint.</p>
-      </div>
-      <div>
-        <span class="panel-kicker">Mobile view</span>
-        <p class="sync-note">Các bảng có thể kéo ngang, KPI tự xếp một cột trên điện thoại.</p>
-      </div>
-    </section>
-
-    <section class="ops-panel auth-panel" id="opsAuthPanel" hidden>
-      <div>
-        <span class="panel-kicker">Supabase auth</span>
-        <h2>Đăng nhập vận hành</h2>
-        <p class="sync-note" id="opsAuthState">Chưa đăng nhập.</p>
-      </div>
-      <form class="auth-form" id="opsLoginForm">
-        <label>Email
-          <input name="email" type="email" autocomplete="username" placeholder="Email admin" required>
-        </label>
-        <label>Mật khẩu
-          <input name="password" type="password" autocomplete="current-password" placeholder="Mật khẩu Supabase" required>
-        </label>
-        <button class="btn primary small" type="submit">Đăng nhập</button>
-      </form>
-      <button class="btn soft small" type="button" id="opsLogoutBtn" hidden>Đăng xuất</button>
+      <div><span class="panel-kicker">Đăng nhập</span><p class="sync-note" id="dashboardAuthState">Bắt buộc đăng nhập.</p></div>
+      <div><span class="panel-kicker">Supabase</span><p class="sync-note" id="supabaseSyncState">Đang chờ tải dữ liệu live.</p></div>
+      <div><span class="panel-kicker">Google Sheet backup</span><p class="sync-note" id="sheetSyncState">Sẵn sàng đồng bộ khi có Apps Script endpoint.</p></div>
     </section>
 
     <section class="ops-toolbar" aria-label="Bộ lọc dashboard">
-      <label>Khoảng xem
-        <select id="periodFilter">
-          <option value="week">Tuần này</option>
-          <option value="month">Tháng này</option>
-          <option value="all">Tất cả dữ liệu</option>
-        </select>
-      </label>
-      <label>Chi nhánh
-        <select id="branchFilter">
-          <option value="all">Tất cả chi nhánh</option>
-        </select>
-      </label>
-      <label>Nguồn khách
-        <select id="sourceFilter">
-          <option value="all">Tất cả nguồn</option>
-        </select>
-      </label>
+      <label>Khoảng xem<select id="periodFilter"><option value="week">Tuần này</option><option value="month">Tháng này</option><option value="year">Năm nay</option><option value="all">Tất cả</option></select></label>
+      <label>Chi nhánh<select id="branchFilter"><option value="all">Tất cả chi nhánh</option></select></label>
+      <label>Nguồn khách<select id="sourceFilter"><option value="all">Tất cả nguồn</option></select></label>
+      <label>Từ ngày<input type="date" id="fromDate"></label>
+      <label>Đến ngày<input type="date" id="toDate"></label>
     </section>
 
     <section class="ops-grid kpi-grid" id="dashboardKpis" aria-label="Chỉ số chính"></section>
 
     <section class="ops-layout">
-      <article class="ops-panel">
-        <span class="panel-kicker">Revenue by day</span>
-        <h2>Doanh thu theo ngày</h2>
-        <div class="chart-bars" id="dailyRevenueChart"></div>
-      </article>
-      <article class="ops-panel">
-        <span class="panel-kicker">Branch mix</span>
-        <h2>Hiệu suất chi nhánh</h2>
-        <div class="chart-bars" id="branchChart"></div>
-      </article>
+      <article class="ops-panel"><span class="panel-kicker">Revenue trend</span><h2>Doanh thu theo ngày</h2><div class="chart-bars" id="dailyRevenueChart"></div></article>
+      <article class="ops-panel"><span class="panel-kicker">Weekday heat</span><h2>Ngày trong tuần đông khách nhất</h2><div class="chart-bars" id="weekdayChart"></div></article>
     </section>
 
     <section class="ops-layout">
-      <article class="ops-panel">
-        <span class="panel-kicker">Source performance</span>
-        <h2>Nguồn booking</h2>
-        <div class="chart-bars" id="sourceChart"></div>
-      </article>
-      <article class="ops-panel">
-        <span class="panel-kicker">Pipeline</span>
-        <h2>Trạng thái CSKH</h2>
-        <div class="pipeline-grid" id="pipelineGrid"></div>
-      </article>
+      <article class="ops-panel"><span class="panel-kicker">Monthly line</span><h2>Tháng nào trong năm tốt nhất</h2><div class="chart-line" id="monthlyLineChart"></div></article>
+      <article class="ops-panel"><span class="panel-kicker">Week in month</span><h2>Tuần nào trong tháng mạnh nhất</h2><div class="chart-bars" id="weekOfMonthChart"></div></article>
     </section>
 
     <section class="ops-layout">
-      <article class="ops-panel">
-        <span class="panel-kicker">Weekday heat</span>
-        <h2>Ngày nào đông khách</h2>
-        <div class="chart-bars" id="weekdayChart"></div>
-      </article>
-      <article class="ops-panel">
-        <span class="panel-kicker">Year trend</span>
-        <h2>Tháng nào mạnh nhất</h2>
-        <div class="chart-bars" id="monthlyChart"></div>
-      </article>
+      <article class="ops-panel"><span class="panel-kicker">Branch mix</span><h2>Hiệu suất chi nhánh</h2><div class="chart-bars" id="branchChart"></div></article>
+      <article class="ops-panel"><span class="panel-kicker">Room performance</span><h2>Phòng/layout tốt nhất & yếu nhất</h2><div class="chart-bars" id="roomChart"></div></article>
     </section>
 
     <section class="ops-layout">
-      <article class="ops-panel">
-        <span class="panel-kicker">Room performance</span>
-        <h2>Phòng / layout hiệu quả</h2>
-        <div class="chart-bars" id="roomChart"></div>
-      </article>
-      <article class="ops-panel">
-        <span class="panel-kicker">Operations alerts</span>
-        <h2>Cảnh báo cần xử lý</h2>
-        <div class="insight-list" id="dashboardInsights"></div>
-      </article>
+      <article class="ops-panel"><span class="panel-kicker">Source performance</span><h2>Nguồn booking</h2><div class="chart-bars" id="sourceChart"></div></article>
+      <article class="ops-panel"><span class="panel-kicker">Algorithm insights</span><h2>Gợi ý xử lý vận hành</h2><div class="insight-list" id="insightList"></div></article>
     </section>
 
-    <section class="ops-panel">
-      <div class="ops-actions" style="justify-content:space-between">
-        <div>
-          <span class="panel-kicker">Weekly / Monthly summary</span>
-          <h2>Bảng tổng kết booking</h2>
-        </div>
-        <a class="btn soft small" href="cskh.html">Mở CSKH</a>
-      </div>
-      <div class="ops-table-wrap">
-        <table class="ops-table">
-          <thead>
-            <tr>
-              <th>Mã</th>
-              <th>Khách</th>
-              <th>Ngày ở</th>
-              <th>Phòng</th>
-              <th>Nguồn</th>
-              <th>Trạng thái</th>
-              <th>Doanh thu</th>
-              <th>Cọc/đã thu</th>
-            </tr>
-          </thead>
-          <tbody id="dashboardBookingRows"></tbody>
-        </table>
-      </div>
-    </section>
+    <section class="ops-panel"><div class="ops-actions" style="justify-content:space-between"><div><span class="panel-kicker">Report table</span><h2>Bảng tổng kết booking</h2></div><a class="btn soft small" href="cskh.html">Mở CSKH</a></div><div class="ops-table-wrap"><table class="ops-table"><thead><tr><th>Mã</th><th>Khách</th><th>Check-in</th><th>Phòng</th><th>Nguồn</th><th>Trạng thái</th><th>Doanh thu</th><th>Cọc/đã thu</th><th>Còn lại</th></tr></thead><tbody id="dashboardBookingRows"></tbody></table></div></section>
   </main>
 
-  <script src="js/supabase-config.js?v=ops-v10"></script>
-  <script src="js/rooms.js?v=ops-v10"></script>
-  <script src="js/ops-data.js?v=ops-v11"></script>
-  <script src="js/dashboard.js?v=ops-v11"></script>
+  <script src="js/supabase-config.js?v=v15"></script>
+  <script src="js/auth-guard.js?v=v15"></script>
+  <script src="js/rooms.js?v=v15"></script>
+  <script src="js/ops-data.js?v=v15"></script>
+  <script src="js/dashboard.js?v=v15"></script>
+<script src="js/admin-unified.js?v=v15"></script>
 </body>
 </html>

@@ -1,15 +1,18 @@
 // UNITESTAYCATION/js/supabase-config.js
-// Public frontend config for Unite Staycation.
-// Never paste a Supabase service_role key or sb_secret key into a public website.
+// V15 AUDITED LIVE OPS CONFIG
+// Chỉ dùng ANON/PUBLISHABLE key trong web public. Không dán service_role hoặc sb_secret vào file này.
 
 window.UNITE_SUPABASE_CONFIG = {
   mode: "supabase", // local | supabase
-  url: "https://afjzycyffhhyifixtelq.supabase.co",
-  publishableKey: "sb_publishable_CO4Kmf1y4Wo6jqTOtGsy4g_Z91G0TX2",
-  anonKey: "",
-  sheetId: "1sd9TKGa2v-6KJWzFjPLGXJ2aOTPXCZdi-ExnkNGrsUM",
-  sheetUrl: "https://docs.google.com/spreadsheets/d/1sd9TKGa2v-6KJWzFjPLGXJ2aOTPXCZdi-ExnkNGrsUM/edit?usp=sharing",
+  url: "https://icudxncctjselkjcbjvp.supabase.co", // ví dụ: https://xxxxx.supabase.co
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljdWR4bmNjdGpzZWxramNianZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MjgwOTAsImV4cCI6MjA5OTIwNDA5MH0.nPU8dSI5od2qE4LAacZgQpLEGk1agbcZZli8POaEuxg",
+  publishableKey: "sb_publishable_YAFSrLzesZg7xGR62oVrdA_MQuKPyz5",
+  sheetId: "PASTE_GOOGLE_SHEET_ID",
+  sheetUrl: "",
   sheetWebhookUrl: "https://script.google.com/macros/s/AKfycbzZp3b7R4MXXATfGLSeEPl_Et9BlDYGF6cphetFl7gMmdTQ50bpaT3GbfkB2UfUcKc/exec",
+  roomImageBucket: "room-images",
+  paymentBillBucket: "payment-bills",
   authProvider: "email-password",
-  adminUserId: "61731da0-58b4-414a-be71-81eeb9ca3c05"
+  requiredLogin: true,
+  appVersion: "v15-audited"
 };

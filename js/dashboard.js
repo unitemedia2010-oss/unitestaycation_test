@@ -1,352 +1,147 @@
 // UNITESTAYCATION/js/dashboard.js
+// V15 Dashboard: live inventory-aware week/month/year reports and operational insights.
 
-const dashboardState = {
-  bookings: window.UniteOps.loadBookings(),
-  period: "week",
-  branch: "all",
-  source: "all"
+const dashboardFallbackRooms = Array.isArray(window.rooms) ? window.rooms : [];
+const dashboardState = { rooms:dashboardFallbackRooms, units:window.UniteOps.roomUnitsFromRooms(dashboardFallbackRooms), bookings: window.UniteOps.loadBookings(), period:"week", branch:"all", source:"all", fromDate:"", toDate:"" };
+const $ = (s, r=document) => r.querySelector(s);
+const escape = (v="") => String(v).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
+
+const setText = (sel, text) => { const el=$(sel); if(el) el.textContent=text; };
+const profileName = () => window.UniteAuth?.profile?.()?.full_name || window.UniteAuth?.profile?.()?.email || "User";
+
+const loadLive = async () => {
+  setText("#supabaseSyncState", "Đang tải inventory và booking Supabase...");
+  const [inventory, result] = await Promise.all([window.UniteOps.loadInventoryAsync(), window.UniteOps.loadBookingsAsync()]);
+  dashboardState.rooms = inventory.rooms || dashboardFallbackRooms;
+  dashboardState.units = inventory.units || window.UniteOps.roomUnitsFromRooms(dashboardState.rooms);
+  dashboardState.bookings = result.rows;
+  window.UniteOps.saveBookings(result.rows);
+  const inventoryText = inventory.ok ? `${inventory.rooms.length} layout · ${inventory.units.length} phòng` : "inventory local";
+  setText("#supabaseSyncState", result.ok ? `Đã tải ${result.rows.length} booking live · ${inventoryText}.` : `Đang dùng local: ${result.reason || result.message || "chưa live"}`);
+  renderAll();
 };
 
-const dashboardNumber = (value) => new Intl.NumberFormat("vi-VN").format(Number(value || 0));
-
-const dashboardStartOfWeek = (date) => {
-  const copy = new Date(date);
-  const day = (copy.getDay() + 6) % 7;
-  copy.setDate(copy.getDate() - day);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
+const startOfPeriod = () => {
+  const now = new Date();
+  if (dashboardState.fromDate) return new Date(`${dashboardState.fromDate}T00:00:00`);
+  if (dashboardState.period === "week") return window.UniteOps.startOfWeek(now);
+  if (dashboardState.period === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
+  if (dashboardState.period === "year") return new Date(now.getFullYear(), 0, 1);
+  return new Date("2000-01-01T00:00:00");
 };
-
-const dashboardInPeriod = (booking) => {
-  if (dashboardState.period === "all") return true;
-  const stay = new Date(booking.stayDate);
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  if (Number.isNaN(stay.getTime())) return true;
-
-  if (dashboardState.period === "week") {
-    const start = dashboardStartOfWeek(today);
-    return stay >= start && stay <= today;
-  }
-
-  return stay.getFullYear() === today.getFullYear() && stay.getMonth() === today.getMonth();
+const endOfPeriod = () => {
+  if (dashboardState.toDate) return new Date(`${dashboardState.toDate}T23:59:59`);
+  const now = new Date(); now.setHours(23,59,59,999); return now;
 };
-
-const dashboardFiltered = () => dashboardState.bookings.filter(booking => {
-  if (!dashboardInPeriod(booking)) return false;
-  if (dashboardState.branch !== "all" && booking.branch !== dashboardState.branch) return false;
-  if (dashboardState.source !== "all" && booking.source !== dashboardState.source) return false;
-  return true;
-});
-
-const dashboardGroupBy = (rows, keyFn, valueFn = () => 1) => rows.reduce((map, row) => {
-  const key = keyFn(row);
-  map.set(key, (map.get(key) || 0) + valueFn(row));
-  return map;
-}, new Map());
-
-const dashboardMonthLabel = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Chưa rõ";
-  return `${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+const filtered = () => {
+  const start = startOfPeriod().getTime(); const end = endOfPeriod().getTime();
+  return dashboardState.bookings.filter(b => {
+    const t = new Date(b.checkinAt || b.stayDate).getTime();
+    if (!Number.isNaN(t) && (t < start || t > end)) return false;
+    if (dashboardState.branch !== "all" && b.branch !== dashboardState.branch) return false;
+    if (dashboardState.source !== "all" && b.source !== dashboardState.source) return false;
+    return true;
+  });
 };
+const groupBy = (rows, keyFn, valFn = () => 1) => rows.reduce((m, r) => { const k=keyFn(r); m.set(k, (m.get(k)||0)+valFn(r)); return m; }, new Map());
+const groupCount = (rows, keyFn) => groupBy(rows, keyFn, () => 1);
+const rowsToSorted = (map) => [...map.entries()].sort((a,b)=>b[1]-a[1]);
+const activeRows = (rows) => rows.filter(b => !["cancelled","no_show"].includes(b.status));
 
-const dashboardWeekdayLabel = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Chưa rõ";
-  return new Intl.DateTimeFormat("vi-VN", { weekday: "long" }).format(date);
-};
-
-const renderSelectOptions = () => {
-  const branchFilter = document.querySelector("#branchFilter");
-  const sourceFilter = document.querySelector("#sourceFilter");
-  const branches = [...new Set((window.rooms || []).map(room => room.location))];
-  const sources = [...new Set([...window.UniteOps.sources, ...dashboardState.bookings.map(item => item.source)])];
-
-  if (branchFilter) {
-    branchFilter.innerHTML = `<option value="all">Tất cả chi nhánh</option>${branches.map(branch => `<option value="${branch}">${branch}</option>`).join("")}`;
-    branchFilter.value = dashboardState.branch;
-  }
-
-  if (sourceFilter) {
-    sourceFilter.innerHTML = `<option value="all">Tất cả nguồn</option>${sources.map(source => `<option value="${source}">${source}</option>`).join("")}`;
-    sourceFilter.value = dashboardState.source;
-  }
+const renderOptions = () => {
+  const branches = [...new Set(dashboardState.rooms.map(r => r.location).concat(dashboardState.bookings.map(b => b.branch)).filter(Boolean))];
+  const sources = [...new Set([...window.UniteOps.sources, ...dashboardState.bookings.map(b => b.source)].filter(Boolean))];
+  $("#branchFilter").innerHTML = `<option value="all">Tất cả chi nhánh</option>${branches.map(b=>`<option value="${escape(b)}">${escape(b)}</option>`).join("")}`;
+  $("#sourceFilter").innerHTML = `<option value="all">Tất cả nguồn</option>${sources.map(s=>`<option value="${escape(s)}">${escape(s)}</option>`).join("")}`;
+  $("#periodFilter").value = dashboardState.period; $("#branchFilter").value = dashboardState.branch; $("#sourceFilter").value = dashboardState.source;
 };
 
 const renderKpis = (rows) => {
-  const revenue = rows.reduce((sum, booking) => sum + window.UniteOps.revenue(booking), 0);
-  const deposit = rows.reduce((sum, booking) => sum + Number(booking.deposit || 0), 0);
-  const paidBookings = rows.filter(booking => ["paid", "checked_in", "checked_out"].includes(booking.status)).length;
-  const conversion = rows.length ? Math.round((paidBookings / rows.length) * 100) : 0;
-  const pending = rows.filter(booking => ["new", "consulting", "holding"].includes(booking.status)).length;
-
-  const kpis = [
-    ["Doanh thu ghi nhận", window.UniteOps.money(revenue), "Tính paid/check-in/check-out, booking đang cọc tính theo số đã thu."],
-    ["Booking", dashboardNumber(rows.length), `${pending} booking cần CSKH xử lý tiếp.`],
-    ["Tiền cọc", window.UniteOps.money(deposit), "Tổng cọc đang giữ hoặc đã thu trong kỳ."],
-    ["Tỷ lệ chốt", `${conversion}%`, "Paid/check-in/check-out trên tổng booking trong bộ lọc."]
+  const useful = activeRows(rows);
+  const revenue = useful.reduce((s,b)=>s+window.UniteOps.bookingRevenue(b),0);
+  const total = useful.reduce((s,b)=>s+Number(b.total||0),0);
+  const paid = useful.reduce((s,b)=>s+Number(b.paid||b.deposit||0),0);
+  const cancellations = rows.filter(b => ["cancelled","no_show"].includes(b.status)).length;
+  const periodStart = startOfPeriod().getTime();
+  const periodEnd = endOfPeriod().getTime();
+  const periodHours = Math.max(1, (periodEnd - periodStart) / 3600000);
+  const availableUnitCount = dashboardState.units.filter(unit => unit.status === "available").length;
+  const occupiedStatuses = ["holding","deposited","paid","checked_in","checked_out"];
+  const occupiedHours = rows.filter(b => occupiedStatuses.includes(b.status) && b.roomUnitCode).reduce((sum, b) => {
+    const start = Math.max(periodStart, new Date(b.checkinAt).getTime());
+    const end = Math.min(periodEnd, new Date(b.checkoutAt).getTime());
+    return sum + (Number.isFinite(start) && Number.isFinite(end) && end > start ? (end - start) / 3600000 : 0);
+  }, 0);
+  const occupancyBase = availableUnitCount * periodHours;
+  const occupancy = occupancyBase ? Math.min(100, Math.round((occupiedHours / occupancyBase) * 100)) : 0;
+  const cards = [
+    ["Doanh thu ghi nhận", window.UniteOps.money(revenue), "Theo trạng thái đã thanh toán/check-in/check-out hoặc đã thu"],
+    ["Booking", window.UniteOps.number(rows.length), `${useful.length} booking đang/đã phục vụ`],
+    ["Đã thu/cọc", window.UniteOps.money(paid), `Còn lại ${window.UniteOps.money(Math.max(0,total-paid))}`],
+    ["Tỷ lệ lấp theo giờ", `${occupancy}%`, `${availableUnitCount} phòng khả dụng · ${cancellations} hủy/no-show`]
   ];
-
-  document.querySelector("#dashboardKpis").innerHTML = kpis.map(([label, value, desc]) => `
-    <article class="kpi-card">
-      <span>${label}</span>
-      <strong>${value}</strong>
-      <small>${desc}</small>
-    </article>
-  `).join("");
+  $("#dashboardKpis").innerHTML = cards.map(([a,b,c]) => `<article class="kpi-card"><span>${a}</span><strong>${b}</strong><small>${c}</small></article>`).join("");
 };
 
-const renderBars = (selector, entries, formatter = dashboardNumber) => {
-  const target = document.querySelector(selector);
-  if (!target) return;
-  const max = Math.max(1, ...entries.map(([, value]) => value));
-  target.innerHTML = entries.length
-    ? entries.map(([label, value]) => `
-      <div class="chart-row">
-        <label>${label}</label>
-        <div class="bar-track"><span style="--w:${Math.max(6, Math.round((value / max) * 100))}%"></span></div>
-        <output>${formatter(value)}</output>
-      </div>
-    `).join("")
-    : `<p class="sync-note">Chưa có dữ liệu trong bộ lọc này.</p>`;
+const renderBarChart = (id, entries, money = false) => {
+  const max = Math.max(1, ...entries.map(x=>x[1]));
+  $(id).innerHTML = entries.slice(0,10).map(([label,value]) => `<div class="chart-bar-row"><span>${escape(label)}</span><div class="chart-track"><i style="width:${Math.max(4, value/max*100)}%"></i></div><strong>${money ? window.UniteOps.money(value) : window.UniteOps.number(value)}</strong></div>`).join("") || `<p class="sync-note">Chưa có dữ liệu.</p>`;
+};
+const renderLineChart = (id, entries) => {
+  const max = Math.max(1, ...entries.map(x=>x[1]));
+  $(id).innerHTML = entries.map(([label,value]) => `<div class="point"><div class="stem" style="--h:${Math.max(4, value/max*100)}%"></div><small>${escape(label)}<br>${window.UniteOps.money(value)}</small></div>`).join("") || `<p class="sync-note">Chưa có dữ liệu.</p>`;
 };
 
-const renderDashboard = () => {
-  const rows = dashboardFiltered();
-  renderKpis(rows);
-
-  const daily = [...dashboardGroupBy(rows, item => window.UniteOps.date(item.stayDate), item => window.UniteOps.revenue(item))]
-    .sort(([a], [b]) => a.localeCompare(b, "vi"));
-  renderBars("#dailyRevenueChart", daily, window.UniteOps.money);
-
-  const byBranch = [...dashboardGroupBy(rows, item => item.branch, item => window.UniteOps.revenue(item))]
-    .sort((a, b) => b[1] - a[1]);
-  renderBars("#branchChart", byBranch, window.UniteOps.money);
-
-  const bySource = [...dashboardGroupBy(rows, item => item.source, item => item.total ? 1 : 0)]
-    .sort((a, b) => b[1] - a[1]);
-  renderBars("#sourceChart", bySource);
-
-  const byWeekday = [...dashboardGroupBy(rows, item => dashboardWeekdayLabel(item.stayDate), () => 1)]
-    .sort((a, b) => b[1] - a[1]);
-  renderBars("#weekdayChart", byWeekday);
-
-  const byMonth = [...dashboardGroupBy(dashboardState.bookings, item => dashboardMonthLabel(item.stayDate), item => window.UniteOps.revenue(item))]
-    .sort(([a], [b]) => a.localeCompare(b, "vi"));
-  renderBars("#monthlyChart", byMonth, window.UniteOps.money);
-
-  const byRoom = [...dashboardGroupBy(rows, item => item.roomName || item.roomId, item => window.UniteOps.revenue(item))]
-    .sort((a, b) => b[1] - a[1]);
-  renderBars("#roomChart", byRoom, window.UniteOps.money);
-
-  const pipeline = ["new", "consulting", "holding", "deposited", "paid", "checked_in", "checked_out", "cancelled"];
-  document.querySelector("#pipelineGrid").innerHTML = pipeline.map(status => {
-    const count = rows.filter(item => item.status === status).length;
-    return `
-      <article class="pipeline-column">
-        <strong>${window.UniteOps.statuses[status] || status}</strong>
-        <span>${count}</span>
-      </article>
-    `;
-  }).join("");
-
-  renderInsights(rows);
-
-  document.querySelector("#dashboardBookingRows").innerHTML = rows
-    .slice()
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .map(booking => `
-      <tr>
-        <td>${booking.id}</td>
-        <td><strong>${booking.customerName}</strong><br><small>${booking.phone}</small></td>
-        <td>${window.UniteOps.date(booking.stayDate)}<br><small>${booking.packageLabel}${booking.nights ? ` · ${booking.nights} đêm` : ""}</small></td>
-        <td>${booking.roomName}<br><small>${booking.branch}</small></td>
-        <td>${booking.source}</td>
-        <td><span class="status-pill ${booking.status}">${window.UniteOps.statuses[booking.status] || booking.status}</span></td>
-        <td>${window.UniteOps.money(window.UniteOps.revenue(booking))}</td>
-        <td>${window.UniteOps.money(booking.deposit)} / ${window.UniteOps.money(booking.paid)}</td>
-      </tr>
-    `).join("");
+const renderCharts = (rows) => {
+  const useful = activeRows(rows);
+  renderBarChart("#dailyRevenueChart", rowsToSorted(groupBy(useful, b => window.UniteOps.isoDate(b.checkinAt), b => window.UniteOps.bookingRevenue(b))).sort((a,b)=>a[0].localeCompare(b[0])), true);
+  const weekdays = ["CN","T2","T3","T4","T5","T6","T7"];
+  renderBarChart("#weekdayChart", rowsToSorted(groupCount(useful, b => weekdays[new Date(b.checkinAt).getDay()])), false);
+  const months = Array.from({length:12}, (_,i)=>`${String(i+1).padStart(2,"0")}`);
+  const monthMap = groupBy(useful, b => String(new Date(b.checkinAt).getMonth()+1).padStart(2,"0"), b=>window.UniteOps.bookingRevenue(b));
+  renderLineChart("#monthlyLineChart", months.map(m => [m, monthMap.get(m)||0]));
+  const weekMap = groupBy(useful, b => `Tuần ${Math.ceil(new Date(b.checkinAt).getDate()/7)}`, b=>window.UniteOps.bookingRevenue(b));
+  renderBarChart("#weekOfMonthChart", rowsToSorted(weekMap), true);
+  renderBarChart("#branchChart", rowsToSorted(groupBy(useful, b=>b.branch || "Khác", b=>window.UniteOps.bookingRevenue(b))), true);
+  renderBarChart("#roomChart", rowsToSorted(groupBy(useful, b=>`${b.roomId} · ${b.roomName}`, b=>window.UniteOps.bookingRevenue(b))), true);
+  renderBarChart("#sourceChart", rowsToSorted(groupBy(useful, b=>b.source || "Khác", b=>window.UniteOps.bookingRevenue(b))), true);
 };
 
 const renderInsights = (rows) => {
-  const target = document.querySelector("#dashboardInsights");
-  if (!target) return;
-
-  const paidRows = rows.filter(item => ["paid", "checked_in", "checked_out"].includes(item.status));
-  const cancelled = rows.filter(item => ["cancelled", "no_show"].includes(item.status)).length;
-  const pendingMoney = rows.filter(item => Number(item.total || 0) > Number(item.paid || item.deposit || 0));
-  const roomRevenue = [...dashboardGroupBy(rows, item => item.roomName || item.roomId, item => window.UniteOps.revenue(item))]
-    .sort((a, b) => b[1] - a[1]);
-  const branchRevenue = [...dashboardGroupBy(rows, item => item.branch, item => window.UniteOps.revenue(item))]
-    .sort((a, b) => b[1] - a[1]);
-  const weekday = [...dashboardGroupBy(rows, item => dashboardWeekdayLabel(item.stayDate), () => 1)]
-    .sort((a, b) => b[1] - a[1]);
-
-  const insights = [
-    {
-      title: "Phòng đang kéo doanh thu tốt",
-      body: roomRevenue[0] ? `${roomRevenue[0][0]} đang dẫn đầu với ${window.UniteOps.money(roomRevenue[0][1])}.` : "Chưa đủ dữ liệu để xếp hạng phòng."
-    },
-    {
-      title: "Chi nhánh cần theo dõi",
-      body: branchRevenue.length > 1 ? `${branchRevenue[branchRevenue.length - 1][0]} đang thấp nhất trong bộ lọc, nên xem lại giá, ảnh hoặc nguồn khách.` : "Cần thêm dữ liệu chi nhánh để so sánh."
-    },
-    {
-      title: "Ngày đông khách",
-      body: weekday[0] ? `${weekday[0][0]} đang có nhiều booking nhất. Có thể tăng nhắc lịch/chuẩn bị phòng vào ngày này.` : "Chưa có booking trong bộ lọc."
-    },
-    {
-      title: "Công nợ cần thu",
-      body: `${pendingMoney.length} booking còn thiếu tiền. Kế toán nên lọc và đối soát trước check-in/check-out.`
-    },
-    {
-      title: "Hủy / no-show",
-      body: `${cancelled} booking hủy hoặc no-show. Nếu tăng cao, cần xem lại chính sách cọc và nhắc lịch.`
-    },
-    {
-      title: "Tỉ lệ chốt",
-      body: rows.length ? `${Math.round((paidRows.length / rows.length) * 100)}% booking trong bộ lọc đã paid/check-in/check-out.` : "Chưa có dữ liệu để tính tỉ lệ chốt."
-    }
-  ];
-
-  target.innerHTML = insights.map(item => `
-    <article class="insight-item">
-      <strong>${item.title}</strong>
-      <span>${item.body}</span>
-    </article>
-  `).join("");
+  const useful = activeRows(rows);
+  const roomRevenue = rowsToSorted(groupBy(useful, b=>`${b.roomId} · ${b.roomName}`, b=>window.UniteOps.bookingRevenue(b)));
+  const branchRevenue = rowsToSorted(groupBy(useful, b=>b.branch || "Khác", b=>window.UniteOps.bookingRevenue(b)));
+  const cancelByRoom = rowsToSorted(groupCount(rows.filter(b=>["cancelled","no_show"].includes(b.status)), b=>`${b.roomId} · ${b.roomName}`));
+  const weekdayBookings = rowsToSorted(groupCount(useful, b=>["CN","T2","T3","T4","T5","T6","T7"][new Date(b.checkinAt).getDay()]));
+  const sourceRev = rowsToSorted(groupBy(useful, b=>b.source || "Khác", b=>window.UniteOps.bookingRevenue(b)));
+  const insights = [];
+  if (branchRevenue[0]) insights.push(["Chi nhánh đang tốt nhất", `${branchRevenue[0][0]} đang dẫn doanh thu kỳ này: ${window.UniteOps.money(branchRevenue[0][1])}. Nên ưu tiên ảnh đẹp, ads và lịch CSKH cho chi nhánh này.`]);
+  if (roomRevenue[0]) insights.push(["Layout/phòng mạnh nhất", `${roomRevenue[0][0]} tạo doanh thu cao nhất: ${window.UniteOps.money(roomRevenue[0][1])}. Có thể dùng làm phòng hero trong truyền thông.`]);
+  if (roomRevenue.at(-1)) insights.push(["Layout cần kiểm tra", `${roomRevenue.at(-1)[0]} đang thấp nhất trong kỳ. Kiểm tra ảnh, giá, tình trạng phòng, mùi, vệ sinh, feedback khách hoặc ưu đãi.`]);
+  if (cancelByRoom[0]) insights.push(["Rủi ro hủy/no-show", `${cancelByRoom[0][0]} có số hủy/no-show cao nhất (${cancelByRoom[0][1]}). Nên rà lại quy trình xác nhận cọc và hướng dẫn check-in.`]);
+  if (weekdayBookings[0]) insights.push(["Ngày đông khách", `${weekdayBookings[0][0]} là ngày có nhiều booking nhất. Nên tăng nhân sự trực CSKH và kiểm phòng trước ngày này.`]);
+  if (sourceRev[0]) insights.push(["Nguồn khách hiệu quả", `${sourceRev[0][0]} đang đem lại doanh thu cao nhất. Nên so sánh chi phí quảng cáo/hoa hồng OTA để tối ưu.`]);
+  $("#insightList").innerHTML = insights.map(([t,p]) => `<div class="insight-item"><strong>${escape(t)}</strong><p>${escape(p)}</p></div>`).join("") || `<p class="sync-note">Chưa đủ dữ liệu để đưa insight.</p>`;
 };
 
-const renderSyncState = (liveResult = null) => {
-  const status = window.UniteOps.configStatus();
-
-  const supabaseNode = document.querySelector("#supabaseSyncState");
-  const sheetNode = document.querySelector("#sheetSyncState");
-  if (supabaseNode) {
-    if (!status.supabaseConfigured) {
-      supabaseNode.textContent = "Chưa nối live. Đang dùng dữ liệu mẫu/localStorage.";
-    } else if (!status.hasSession) {
-      supabaseNode.textContent = "Đã có Supabase public key. Đăng nhập email/password để đọc dữ liệu live.";
-    } else if (liveResult?.ok) {
-      supabaseNode.textContent = `Đang đọc ${liveResult.rows.length} booking từ Supabase.`;
-    } else {
-      supabaseNode.textContent = liveResult?.message
-        ? `Chưa đọc được Supabase: ${liveResult.message}. Đang dùng localStorage.`
-        : "Đã đăng nhập. Nếu chưa có dữ liệu live, hãy chạy schema trong SQL Editor.";
-    }
-  }
-  if (sheetNode) {
-    sheetNode.textContent = status.sheetConfigured
-      ? "Đã có Apps Script endpoint. Có thể sync backup sang Sheet."
-      : status.sheetUrl
-        ? "Đã lưu link Sheet. Cần deploy Apps Script Web App để sync tự động."
-        : "Sẵn sàng đồng bộ khi có Apps Script endpoint.";
-  }
+const renderRows = (rows) => {
+  $("#dashboardBookingRows").innerHTML = rows.sort((a,b)=>new Date(b.checkinAt)-new Date(a.checkinAt)).map(b => `<tr><td>${escape(b.id)}</td><td>${escape(b.customerName)}<br><small>${escape(b.phone)}</small></td><td>${window.UniteOps.dateTime(b.checkinAt)}</td><td>${escape(b.roomName)}<br><small>${escape(b.roomUnitName || b.roomUnitCode || "")}</small></td><td>${escape(b.source)}</td><td>${escape(window.UniteOps.statuses[b.status] || b.status)}</td><td>${window.UniteOps.money(window.UniteOps.bookingRevenue(b))}</td><td>${window.UniteOps.money(b.paid || b.deposit)}</td><td>${window.UniteOps.money(window.UniteOps.bookingBalance(b))}</td></tr>`).join("") || `<tr><td colspan="9">Chưa có dữ liệu.</td></tr>`;
 };
 
-const dashboardSetSheetStatus = (message) => {
-  const sheetNode = document.querySelector("#sheetSyncState");
-  if (sheetNode) sheetNode.textContent = message;
+const renderAll = () => { const rows = filtered(); renderOptions(); renderKpis(rows); renderCharts(rows); renderInsights(rows); renderRows(rows); };
+
+const bind = () => {
+  setText("#dashboardAuthState", `Đã đăng nhập: ${profileName()} · quyền ${window.UniteAuth?.profile?.()?.role || ""}`);
+  renderOptions(); renderAll(); loadLive();
+  $("#periodFilter").addEventListener("change", e => { dashboardState.period=e.target.value; dashboardState.fromDate=""; dashboardState.toDate=""; $("#fromDate").value=""; $("#toDate").value=""; renderAll(); });
+  $("#branchFilter").addEventListener("change", e => { dashboardState.branch=e.target.value; renderAll(); });
+  $("#sourceFilter").addEventListener("change", e => { dashboardState.source=e.target.value; renderAll(); });
+  $("#fromDate").addEventListener("change", e => { dashboardState.fromDate=e.target.value; renderAll(); });
+  $("#toDate").addEventListener("change", e => { dashboardState.toDate=e.target.value; renderAll(); });
+  $("#dashboardExport").addEventListener("click", () => window.UniteOps.downloadCsv(filtered(), "unite-dashboard-report.csv"));
+  $("#dashboardReload").addEventListener("click", loadLive);
+  $("#dashboardSyncSheet").addEventListener("click", async () => { setText("#sheetSyncState", "Đang đồng bộ Sheet..."); const r=await window.UniteOps.syncBookingsToSheetAsync(filtered()); setText("#sheetSyncState", `Đã gửi ${r.synced}/${r.total} dòng sang Sheet.`); });
 };
 
-const hydrateDashboardFromLive = async () => {
-  const result = await window.UniteOps.loadBookingsAsync();
-  dashboardState.bookings = result.rows;
-  renderSelectOptions();
-  renderSyncState(result);
-  renderDashboard();
-};
-
-const dashboardImportFile = async (file) => {
-  if (!file) return;
-  dashboardSetSheetStatus(`Đang nhập dữ liệu từ ${file.name}...`);
-  const rows = await window.UniteOps.rowsFromFileAsync(file);
-  const imported = rows.map((row, index) => window.UniteOps.normalizeImportedBooking(row, index));
-  const merged = window.UniteOps.mergeBookings(dashboardState.bookings, imported);
-  dashboardState.bookings = merged.rows;
-  window.UniteOps.saveBookings(merged.rows);
-  const remote = await window.UniteOps.importBookingsToSupabaseAsync(imported);
-  renderSelectOptions();
-  renderDashboard();
-  dashboardSetSheetStatus(remote.ok
-    ? `Đã nhập ${imported.length} dòng; thêm ${merged.added}, cập nhật ${merged.updated}; Supabase thêm ${remote.inserted}, cập nhật ${remote.updated}.`
-    : `Đã nhập ${imported.length} dòng; thêm ${merged.added}, cập nhật ${merged.updated}. Supabase chưa nhận: ${remote.message || remote.reason || "cần đăng nhập/quyền phù hợp"}.`);
-};
-
-const dashboardPullFromSheet = async (button) => {
-  if (button) button.disabled = true;
-  dashboardSetSheetStatus("Đang lấy booking từ Google Sheet về dashboard...");
-  const result = await window.UniteOps.pullBookingsFromSheetAsync(dashboardState.bookings);
-  if (result.ok) {
-    dashboardState.bookings = result.rows;
-    renderSelectOptions();
-    renderDashboard();
-    const remote = result.supabase || {};
-    dashboardSetSheetStatus(remote.ok
-      ? `Đã lấy ${result.imported} dòng từ Sheet; thêm ${result.added}, cập nhật ${result.updated}; Supabase thêm ${remote.inserted}, cập nhật ${remote.updated}.`
-      : `Đã lấy ${result.imported} dòng từ Sheet; thêm ${result.added}, cập nhật ${result.updated}. Supabase chưa nhận: ${remote.message || remote.reason || "cần đăng nhập/quyền phù hợp"}.`);
-  } else {
-    dashboardSetSheetStatus(`Không lấy được Sheet: ${result.message || result.reason || "kiểm tra Apps Script"}.`);
-  }
-  if (button) button.disabled = false;
-};
-
-document.addEventListener("DOMContentLoaded", async () => {
-  renderSelectOptions();
-  renderSyncState();
-  renderDashboard();
-  window.UniteOps.initAuthPanel({
-    onAuthChange: hydrateDashboardFromLive,
-    requiredPermissions: ["readOperations"],
-    permissionLabel: "tài khoản vận hành đang mở"
-  });
-  await hydrateDashboardFromLive();
-
-  document.querySelector("#periodFilter")?.addEventListener("change", event => {
-    dashboardState.period = event.target.value;
-    renderDashboard();
-  });
-
-  document.querySelector("#branchFilter")?.addEventListener("change", event => {
-    dashboardState.branch = event.target.value;
-    renderDashboard();
-  });
-
-  document.querySelector("#sourceFilter")?.addEventListener("change", event => {
-    dashboardState.source = event.target.value;
-    renderDashboard();
-  });
-
-  document.querySelector("#dashboardExport")?.addEventListener("click", () => {
-    window.UniteOps.downloadCsv(dashboardFiltered(), `unite-dashboard-${dashboardState.period}.csv`);
-  });
-
-  document.querySelector("#dashboardImportFile")?.addEventListener("change", async event => {
-    const file = event.target.files?.[0];
-    try {
-      await dashboardImportFile(file);
-    } catch (error) {
-      dashboardSetSheetStatus(`Import lỗi: ${error.message}`);
-    } finally {
-      event.target.value = "";
-    }
-  });
-
-  document.querySelector("#dashboardSyncSheet")?.addEventListener("click", async event => {
-    const button = event.currentTarget;
-    const rows = dashboardFiltered();
-    button.disabled = true;
-    dashboardSetSheetStatus(`Đang gửi ${rows.length} booking sang Google Sheet...`);
-    const result = await window.UniteOps.syncBookingsToSheetAsync(rows);
-    dashboardSetSheetStatus(result.ok
-      ? `Đã gửi ${result.synced} booking sang Sheet.`
-      : `Đã gửi ${result.synced || 0}, lỗi ${result.failed || 0}. Kiểm tra Apps Script nếu Sheet chưa cập nhật.`);
-    button.disabled = false;
-  });
-
-  document.querySelector("#dashboardPullSheet")?.addEventListener("click", event => {
-    dashboardPullFromSheet(event.currentTarget);
-  });
-});
+window.addEventListener("unite:auth-ready", bind);
+document.addEventListener("DOMContentLoaded", () => window.UniteAuth?.require(["super_admin", "admin", "accountant"]));

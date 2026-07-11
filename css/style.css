@@ -1365,7 +1365,8 @@ button {
   background: rgba(255,255,255,0.12);
 }
 
-.contact-item span {
+.contact-item span,
+.contact-item > svg {
   width: 48px;
   height: 48px;
   display: grid;
@@ -1375,6 +1376,10 @@ button {
   background: var(--ivory);
   color: var(--dark-red);
   font-weight: 900;
+  box-sizing: border-box;
+}
+.contact-item > svg {
+  padding: 12px;
 }
 
 .contact-item strong {
@@ -1391,7 +1396,7 @@ button {
 }
 
 .site-footer {
-  padding: 26px clamp(18px, 5vw, 72px);
+  padding: 26px clamp(18px, 5vw, 72px) 84px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 13px;

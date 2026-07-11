@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>CSKH booking | Unite Staycation</title>
-  <meta name="description" content="Giao diện chăm sóc khách hàng, cập nhật booking đa kênh và quản lý lịch giữ phòng Unite Staycation." />
+  <meta name="description" content="Giao diện chăm sóc khách hàng, cập nhật booking đa kênh và quản lý lịch giữ phòng của Unite Staycation." />
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/custom.css?v=ops-v10" />
-  <link rel="stylesheet" href="css/ops.css?v=ops-v11" />
+  <link rel="stylesheet" href="css/custom.css?v=v15.3" />
+  <link rel="stylesheet" href="css/ops.css?v=v15.3" />
 </head>
 <body data-page="cskh">
   <header class="site-header" id="siteHeader">
@@ -15,197 +15,78 @@
       <span class="brand-logo"><img src="logo/logo.png" alt="Unite Staycation logo"></span>
       <span class="brand-copy">
         <strong>Unite Staycation</strong>
-        <small>CSKH desk</small>
+        <small>Admin hub</small>
       </span>
     </a>
 
-    <nav class="top-nav">
-      <a href="dashboard.html">Dashboard</a>
-      <a href="admin-live.html">Admin live</a>
+    <nav class="top-nav" style="display:flex;align-items:center;gap:12px;">
       <a href="admin.html">Admin</a>
-      <a href="rooms.html">Chọn phòng</a>
-      <a class="nav-cta" href="index.html">Trang chính</a>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="cskh.html">CSKH</a>
+      <button id="bellNotificationBtn" type="button" aria-label="Thông báo đơn mới" style="position:relative;background:none;border:none;cursor:pointer;padding:6px 10px;font-size:20px;line-height:1;color:inherit;border-radius:8px;transition:background 0.2s;display:flex;align-items:center;justify-content:center;" title="Đơn mới đang chờ xử lý">
+        🔔
+        <span id="bellBadge" style="display:none;position:absolute;top:2px;right:2px;background:#e53935;color:#fff;font-size:10px;font-weight:700;border-radius:999px;min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 4px;box-shadow:0 1px 4px rgba(0,0,0,.3);">0</span>
+      </button>
     </nav>
   </header>
 
   <main class="ops-page">
-    <section class="ops-hero">
+    <section class="ops-hero cskh-hero-compact">
       <div>
         <p class="section-kicker">Customer care</p>
-        <h1>Bàn CSKH cho mọi nguồn booking.</h1>
-        <p>Nhập booking từ web, Zalo, fanpage, Instagram hoặc OTA. Mỗi booking có trạng thái, tiền cọc, người phụ trách, bill và cảnh báo trùng lịch theo giờ.</p>
+        <h1>Tạo booking & lưu bill.</h1>
+        <p>Nhập đơn, tải bill cọc và bill thanh toán ngay trong cùng một luồng. Trạng thái được kiểm soát theo chứng từ thực tế.</p>
       </div>
-      <div class="ops-actions">
-        <label class="file-action">
-          <input id="cskhImportFile" type="file" accept=".csv,.json">
-          <span class="btn soft small">Nhập CSV</span>
-        </label>
+      <div class="ops-actions ops-actions-primary">
         <button class="btn soft small" type="button" id="cskhExport">Xuất CSV</button>
-        <button class="btn soft small" type="button" id="cskhSyncSheet">Sync Sheet</button>
-        <button class="btn soft small" type="button" id="cskhPullSheet">Nhập từ Sheet</button>
+        <button class="btn soft small" type="button" id="cskhReload">Tải Supabase</button>
+        <label class="btn soft small import-backup-button" for="cskhImportFile">Nhập backup Excel/CSV</label>
+        <input id="cskhImportFile" class="visually-hidden" type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        <span class="import-state" id="backupImportState" aria-live="polite"></span>
       </div>
     </section>
 
-    <section class="sync-strip" aria-label="Trạng thái đồng bộ CSKH">
-      <div>
-        <span class="panel-kicker">Nguồn thật</span>
-        <p class="sync-note" id="cskhSupabaseSyncState">Khi nối Supabase, booking web sẽ tự đổ vào đây.</p>
-      </div>
-      <div>
-        <span class="panel-kicker">Booking ngoài web</span>
-        <p class="sync-note">CSKH nhập thủ công cho Agoda, Airbnb, Booking, Zalo, Fanpage...</p>
-      </div>
-      <div>
-        <span class="panel-kicker">Sheet backup</span>
-        <p class="sync-note" id="cskhSheetSyncState">Có thể sync cuối ngày để team quen dùng Sheet kiểm tra chéo.</p>
-      </div>
-    </section>
 
-    <section class="ops-panel auth-panel" id="opsAuthPanel" hidden>
-      <div>
-        <span class="panel-kicker">Supabase auth</span>
-        <h2>Đăng nhập vận hành</h2>
-        <p class="sync-note" id="opsAuthState">Chưa đăng nhập.</p>
-      </div>
-      <form class="auth-form" id="opsLoginForm">
-        <label>Email
-          <input name="email" type="email" autocomplete="username" placeholder="Email admin" required>
-        </label>
-        <label>Mật khẩu
-          <input name="password" type="password" autocomplete="current-password" placeholder="Mật khẩu Supabase" required>
-        </label>
-        <button class="btn primary small" type="submit">Đăng nhập</button>
-      </form>
-      <button class="btn soft small" type="button" id="opsLogoutBtn" hidden>Đăng xuất</button>
-    </section>
 
-    <section class="ops-grid kpi-grid" id="cskhKpis" aria-label="Chỉ số CSKH"></section>
+    <section class="ops-panel booking-queue-panel">
+      <div class="ops-actions" style="justify-content:space-between">
+        <div><span class="panel-kicker">Booking queue</span><h2>Danh sách CSKH</h2></div>
+        <div class="ops-toolbar">
+          <label>Tìm<input id="cskhSearch" type="search" placeholder="Tên, SĐT, mã phòng"></label>
+          <label>Trạng thái<select id="cskhStatusFilter"><option value="all">Tất cả</option></select></label>
+          <label>Nguồn<select id="cskhSourceFilter"><option value="all">Tất cả</option></select></label>
+          <button type="button" class="btn primary" onclick="window.openCreateBookingModal()" style="margin-top:auto;white-space:nowrap;">+ Tạo đơn mới</button>
+        </div>
+      </div>
+      <div class="booking-list" id="bookingList"></div>
+    </section>
 
     <section class="ops-panel calendar-panel">
       <div class="ops-actions" style="justify-content:space-between">
-        <div>
-          <span class="panel-kicker">Weekly room calendar</span>
-          <h2>Lịch phòng theo tuần</h2>
-          <p class="sync-note" id="calendarSummary">Xem phòng trống/bận theo giờ, phát hiện trùng lịch trước khi giữ phòng.</p>
-        </div>
-        <div class="ops-actions">
+        <div><span class="panel-kicker">Weekly calendar</span><h2>Lịch phòng trống/bận theo tuần</h2></div>
+        <div class="ops-toolbar">
+          <label>Tuần bắt đầu<input id="weekStart" type="date"></label>
+          <label>Chi nhánh<select id="calendarBranch"><option value="all">Tất cả chi nhánh</option></select></label>
           <button class="btn soft small" type="button" id="calendarPrev">Tuần trước</button>
-          <button class="btn soft small" type="button" id="calendarToday">Tuần này</button>
           <button class="btn soft small" type="button" id="calendarNext">Tuần sau</button>
         </div>
       </div>
-      <div class="calendar-week" id="roomCalendar"></div>
+      <div class="booking-calendar" id="bookingCalendar"></div>
     </section>
 
-    <section class="booking-workspace">
-      <form class="booking-form" id="bookingForm">
-        <h2>Thêm booking</h2>
-        <label>Tên khách
-          <input name="customerName" type="text" placeholder="Ví dụ: Minh Anh" required>
-        </label>
-        <label>Số điện thoại
-          <input name="phone" type="tel" placeholder="090..." required>
-        </label>
-        <label>Nguồn booking
-          <select name="source" id="bookingSource"></select>
-        </label>
-        <label>Phòng / layout
-          <select name="roomId" id="bookingRoom"></select>
-        </label>
-        <label>Ngày nhận
-          <input name="stayDate" type="date" required>
-        </label>
-        <label>Giờ nhận
-          <input name="startTime" type="time" value="14:00" required>
-        </label>
-        <label>Giờ trả
-          <input name="endTime" type="time" value="17:00" required>
-        </label>
-        <label>Gói lưu trú
-          <select name="packageLabel">
-            <option value="3 tiếng">3 tiếng</option>
-            <option value="4 tiếng">4 tiếng</option>
-            <option value="8 tiếng">8 tiếng</option>
-            <option value="Theo ngày">Theo ngày</option>
-          </select>
-        </label>
-        <label>Số đêm
-          <input name="nights" type="number" min="0" max="30" value="0">
-        </label>
-        <label>Số khách
-          <input name="guests" type="number" min="1" max="4" value="2">
-        </label>
-        <label>Tổng tiền
-          <input name="total" type="text" inputmode="numeric" data-money-field placeholder="299,000" required>
-        </label>
-        <label>Tiền cọc / đã thu
-          <input name="deposit" type="text" inputmode="numeric" data-money-field placeholder="150,000">
-        </label>
-        <label>Còn lại cần thu
-          <input name="balance" type="text" inputmode="numeric" readonly value="0">
-        </label>
-        <label>Loại thanh toán
-          <select name="paymentType">
-            <option value="deposit">Cọc giữ phòng</option>
-            <option value="remaining">Thu phần còn lại</option>
-            <option value="full">Thanh toán đủ</option>
-            <option value="refund">Hoàn/điều chỉnh</option>
-          </select>
-        </label>
-        <label>Phương thức
-          <select name="paymentMethod">
-            <option value="Chuyển khoản">Chuyển khoản</option>
-            <option value="Tiền mặt">Tiền mặt</option>
-            <option value="OTA">OTA</option>
-            <option value="Khác">Khác</option>
-          </select>
-        </label>
-        <label>Thời gian nhận tiền
-          <input name="paymentAt" type="datetime-local">
-        </label>
-        <label>Bill / biên nhận
-          <input name="billFile" type="file" accept="image/*,.pdf">
-        </label>
-        <label>Trạng thái
-          <select name="status" id="bookingStatus"></select>
-        </label>
-        <label>Ghi chú CSKH
-          <textarea name="note" placeholder="Setup, giờ khách muốn nhận, yêu cầu đặc biệt..."></textarea>
-        </label>
-        <button class="btn primary" type="submit">Lưu booking</button>
-        <p class="sync-note">Khi đăng nhập đúng quyền, booking sẽ ghi Supabase và backup sang Sheet nếu endpoint đang hoạt động.</p>
-      </form>
-
-      <section class="ops-panel">
-        <div class="ops-actions" style="justify-content:space-between">
-          <div>
-            <span class="panel-kicker">Booking queue</span>
-            <h2>Danh sách CSKH</h2>
-          </div>
-          <div class="ops-toolbar">
-            <label>Tìm
-              <input id="cskhSearch" type="search" placeholder="Tên, SĐT, mã phòng">
-            </label>
-            <label>Trạng thái
-              <select id="cskhStatusFilter">
-                <option value="all">Tất cả</option>
-              </select>
-            </label>
-            <label>Nguồn
-              <select id="cskhSourceFilter">
-                <option value="all">Tất cả</option>
-              </select>
-            </label>
-          </div>
-        </div>
-        <div class="booking-list" id="bookingList"></div>
-      </section>
+    <section class="sync-strip" aria-label="Trạng thái đồng bộ CSKH">
+      <div><span class="panel-kicker">Đăng nhập</span><p class="sync-note" id="cskhAuthState">Bắt buộc đăng nhập mới thao tác được.</p></div>
+      <div><span class="panel-kicker">Supabase</span><p class="sync-note" id="cskhSupabaseSyncState">Đang chờ tải dữ liệu live.</p></div>
+      <div><span class="panel-kicker">Google Sheet</span><p class="sync-note" id="cskhSheetSyncState">Tự backup khi lưu booking nếu đã cấu hình webhook.</p></div>
     </section>
   </main>
 
-  <script src="js/supabase-config.js?v=ops-v10"></script>
-  <script src="js/rooms.js?v=ops-v10"></script>
-  <script src="js/ops-data.js?v=ops-v11"></script>
-  <script src="js/cskh.js?v=ops-v11"></script>
+  <script src="js/supabase-config.js?v=v15.3"></script>
+  <script src="js/auth-guard.js?v=v15.3"></script>
+  <script src="js/rooms.js?v=v15.3"></script>
+  <script src="js/ops-data.js?v=v15.3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="js/cskh.js?v=v15.3"></script>
+<script src="js/admin-unified.js?v=v15"></script>
 </body>
 </html>
