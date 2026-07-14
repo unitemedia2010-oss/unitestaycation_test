@@ -1389,13 +1389,15 @@ const ensureContactModal = () => {
       <div class="contact-modal-head" style="margin-bottom: 16px;">
         <span>Yêu cầu đặt phòng</span>
         <h2 id="contactModalTitle">Đặt ngay trên web</h2>
-        <p id="contactModalSummary">Điền thông tin để Unite xác nhận lịch trống và giữ phòng cho bạn.</p>
+        <p id="contactModalSummary" style="color:var(--text-gray, #666); font-size:14px; margin-top:4px;">Điền thông tin để Unite xác nhận lịch trống và giữ phòng cho bạn.</p>
+        <div id="contactModalDetails" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:6px;"></div>
       </div>
       
       <form id="customerBookingForm" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
         <input type="text" name="customerName" placeholder="Họ và tên của bạn *" required style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px;">
         <input type="tel" name="phone" placeholder="Số điện thoại / Zalo *" required style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px;">
-        <textarea name="note" placeholder="Ghi chú thêm (giờ muốn nhận phòng, yêu cầu đặc biệt...)" rows="3" style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px; resize: vertical;"></textarea>
+        <label style="font-size:14px; font-weight:500; margin-bottom: 4px; display:block; color: var(--text-dark, #333);">Chọn ngày và giờ nhận phòng:</label>
+        <input type="datetime-local" name="note" required style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px; width: 100%; box-sizing: border-box;">
         <button type="submit" class="btn primary" id="submitCustomerBookingBtn" style="margin-top: 8px; padding: 14px; font-size: 16px; border-radius: 8px;">Gửi yêu cầu đặt phòng</button>
       </form>
       
@@ -1503,8 +1505,27 @@ const openContactModal = (context = getContactContext()) => {
   
   window.currentBookingContext = context;
 
-  if (summary) {
-    summary.textContent = `${context.room} · ${context.destination} · ${context.date} · ${context.duration} · ${context.guests}`;
+  const details = $("#contactModalDetails");
+  if (details) {
+    const tags = [
+      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>`, text: context.room },
+      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`, text: context.destination },
+      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`, text: context.date },
+      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`, text: context.duration },
+      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`, text: context.guests }
+    ].filter(t => t.text && !t.text.includes("chưa chọn"));
+    details.innerHTML = tags.map(t => `<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(122,0,0,0.06); color:var(--dark-red); padding:4px 8px; border-radius:4px; font-size:13px; font-weight:600; white-space:nowrap;">${t.icon} ${t.text}</span>`).join("");
+  }
+
+  const datetimeInput = document.querySelector("#customerBookingForm input[name='note']");
+  if (datetimeInput) {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    let defaultDateTime = now.toISOString().slice(0, 16);
+    if (context.date && context.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      defaultDateTime = `${context.date}T${defaultDateTime.split('T')[1]}`;
+    }
+    datetimeInput.value = defaultDateTime;
   }
 
   if (grid) {
@@ -1689,17 +1710,33 @@ const roomDetailContent = (room) => {
   const isNhieuTu = room.location.includes("Nhiêu Tứ");
   const admin = getRoomAdmin(room);
 
-  const locationPicks = isNhieuTu
-    ? [
-        { name: "Phan Xích Long", desc: "Nhiều quán ăn, cafe và tiện mua đồ trước khi check-in." },
-        { name: "Sân bay Tân Sơn Nhất", desc: "Di chuyển thuận tiện cho khách cần nghỉ ngắn trước hoặc sau chuyến bay." },
-        { name: "Trung tâm Quận 1", desc: "Phù hợp ghé chơi, chụp hình hoặc ăn tối rồi quay về nghỉ riêng tư." }
-      ]
-    : [
-        { name: "Khu Phan Tây Hồ", desc: "Hẻm yên tĩnh, dễ đặt xe và nhiều lựa chọn ăn uống gần phòng." },
-        { name: "Phan Xích Long", desc: "Gần cafe, nhà hàng, cửa hàng tiện lợi và các điểm hẹn nhẹ nhàng." },
-        { name: "Trục Hoàng Văn Thụ", desc: "Thuận tiện đi sân bay, Quận 1, Bình Thạnh hoặc Gò Vấp." }
-      ];
+  const isLeVanSy = room.location.includes("Lê Văn Sỹ");
+  
+  let locationPicks = [];
+  let mapUrl = "";
+  
+  if (isNhieuTu) {
+    locationPicks = [
+      { name: "Phan Xích Long", desc: "Nhiều quán ăn, cafe và tiện mua đồ trước khi check-in." },
+      { name: "Sân bay Tân Sơn Nhất", desc: "Di chuyển thuận tiện cho khách cần nghỉ ngắn trước hoặc sau chuyến bay." },
+      { name: "Trung tâm Quận 1", desc: "Phù hợp ghé chơi, chụp hình hoặc ăn tối rồi quay về nghỉ riêng tư." }
+    ];
+    mapUrl = "https://maps.google.com/maps?q=29%20Nhi%C3%AAu%20T%E1%BB%A9%2C%20Ph%C3%BA%20Nhu%E1%BA%ADn%2C%20H%E1%BB%93%20Ch%C3%AD%20Minh&t=&z=15&ie=UTF8&iwloc=&output=embed";
+  } else if (isLeVanSy) {
+    locationPicks = [
+      { name: "Sân bay Tân Sơn Nhất", desc: "Cách sân bay chỉ 10 phút, cực kỳ thuận tiện." },
+      { name: "Khu Bắc Hải", desc: "Khu vực ăn uống sầm uất, nhiều lựa chọn ẩm thực địa phương." },
+      { name: "Ngã tư Bảy Hiền", desc: "Nút giao thông lớn dễ dàng đi các quận Tân Bình, Quận 3, Phú Nhuận." }
+    ];
+    mapUrl = "https://maps.google.com/maps?q=305%2F6%20L%C3%AA%20V%C4%83n%20S%E1%BB%B9%2C%20H%E1%BB%93%20Ch%C3%AD%20Minh&t=&z=15&ie=UTF8&iwloc=&output=embed";
+  } else {
+    locationPicks = [
+      { name: "Khu Phan Tây Hồ", desc: "Hẻm yên tĩnh, dễ đặt xe và nhiều lựa chọn ăn uống gần phòng." },
+      { name: "Phan Xích Long", desc: "Gần cafe, nhà hàng, cửa hàng tiện lợi và các điểm hẹn nhẹ nhàng." },
+      { name: "Trục Hoàng Văn Thụ", desc: "Thuận tiện đi sân bay, Quận 1, Bình Thạnh hoặc Gò Vấp." }
+    ];
+    mapUrl = "https://maps.google.com/maps?q=76%2F39%20Phan%20T%C3%A2y%20H%E1%BB%93%2C%20Ph%C3%BA%20Nhu%E1%BA%ADn%2C%20H%E1%BB%93%20Ch%C3%AD%20Minh&t=&z=15&ie=UTF8&iwloc=&output=embed";
+  }
 
   return {
     score: isSignature ? "4.9" : isBudget ? "4.7" : "4.8",
@@ -1746,7 +1783,8 @@ const roomDetailContent = (room) => {
       { q: "Làm sao biết còn phòng?", a: "Khách gửi mã phòng và khung giờ mong muốn, admin sẽ xác nhận tình trạng trước khi chốt." },
       { q: "Có cần đọc nội quy trước không?", a: "Nên đọc trước phần nội quy để tránh phụ thu trễ giờ, vượt số khách hoặc phát sinh ngoài ý muốn." }
     ],
-    nearby: locationPicks
+    nearby: locationPicks,
+    mapUrl: mapUrl
   };
 };
 
@@ -1754,7 +1792,7 @@ const compactPricesHTML = (room) => `
   <div class="compact-price-line">
     <span><small>3h</small>${getPrice(room, "3 tiếng")}</span>
     <span><small>4h</small>${getPrice(room, "4 tiếng")}</span>
-    <span><small>8h</small>${getPrice(room, "8 tiếng")}</span>
+    <span><small>Đêm</small>${getPrice(room, "Qua đêm")}</span>
     <span><small>Ngày</small>${getPrice(room, "Ngày")}</span>
   </div>
 `;
@@ -1919,7 +1957,7 @@ const priceCompareHTML = (room, index = 0) => `
     <div class="price-values">
       <span><small>3 tiếng</small><strong>${getPrice(room, "3 tiếng")}</strong></span>
       <span><small>4 tiếng</small><strong>${getPrice(room, "4 tiếng")}</strong></span>
-      <span><small>8 tiếng</small><strong>${getPrice(room, "8 tiếng")}</strong></span>
+      <span><small>Qua đêm</small><strong>${getPrice(room, "Qua đêm")}</strong></span>
       <span><small>Ngày</small><strong>${getPrice(room, "Ngày")}</strong></span>
     </div>
 
@@ -2057,7 +2095,7 @@ const bookingWidgetHTML = ({ className = "", buttonText = "Tìm phòng", note = 
       <div class="booking-popover duration-popover" data-booking-panel="duration">
         <button type="button" data-duration="3 tiếng" class="active">3 giờ <small>Nghỉ nhanh, xem phim</small></button>
         <button type="button" data-duration="4 tiếng">4 giờ <small>Thoải mái hơn một chút</small></button>
-        <button type="button" data-duration="8 tiếng">8 giờ <small>Nửa ngày riêng tư</small></button>
+        <button type="button" data-duration="Qua đêm">Qua đêm <small>Linh hoạt stay dài hơn</small></button>
         <button type="button" data-duration="Ngày">Theo ngày <small>Ở lâu, check-in rõ lịch</small></button>
         <div class="night-stepper" id="bookingNightsWrap" hidden>
           <span><strong>Số đêm</strong><small>Cho đặt theo ngày hoặc nhiều ngày.</small></span>
@@ -2142,7 +2180,7 @@ const initHomeBookingWidget = () => {
   const durationLabels = {
     "3 tiếng": "3 giờ",
     "4 tiếng": "4 giờ",
-    "8 tiếng": "8 giờ",
+    "Qua đêm": "Qua đêm",
     "Ngày": "Theo ngày"
   };
   state.durationLabel = durationLabels[state.duration] || state.duration;
@@ -2485,7 +2523,7 @@ const initSmartBookingDock = () => {
             <select id="smartDuration">
               <option value="3 tiếng">3 giờ</option>
               <option value="4 tiếng">4 giờ</option>
-              <option value="8 tiếng">8 giờ</option>
+              <option value="Qua đêm">Qua đêm</option>
               <option value="Ngày">Theo ngày</option>
             </select>
           </label>
@@ -2534,7 +2572,7 @@ const initSmartBookingDock = () => {
   const durationLabel = (value) => ({
     "3 tiếng": "3 giờ",
     "4 tiếng": "4 giờ",
-    "8 tiếng": "8 giờ",
+    "Qua đêm": "Qua đêm",
     "Ngày": "Theo ngày"
   })[value] || value;
 
@@ -2828,6 +2866,17 @@ const renderRoomsResults = () => {
 
 const initRoomsResultsPage = () => {
   if (!$("#roomsResultList")) return;
+  
+  const mapCard = document.querySelector(".result-map-card");
+  if (mapCard && window.rooms?.length) {
+    const coverRoom = window.rooms.find(r => r.id === "C8-THE-ART") || window.rooms[0];
+    if (coverRoom && coverRoom.images?.length) {
+      mapCard.style.backgroundImage = `linear-gradient(to top, rgba(82,0,8,0.95) 0%, rgba(122,0,0,0.3) 60%, rgba(0,0,0,0) 100%), url("${coverRoom.images[0]}")`;
+      mapCard.style.backgroundSize = "cover";
+      mapCard.style.backgroundPosition = "center";
+    }
+  }
+
   renderRoomsResults();
   $("#roomsSort")?.addEventListener("change", renderRoomsResults);
   $$("[data-result-filter]").forEach(input => input.addEventListener("change", renderRoomsResults));
@@ -3438,7 +3487,7 @@ const renderRoomDetail = () => {
             <h3>${item.label}</h3>
             <strong>${item.value}</strong>
             <p>${index === 0 ? "Phù hợp cho một buổi nghỉ nhanh, xem phim hoặc đổi không gian." : "Phù hợp cho lịch lưu trú dài hơn, nghỉ ngơi, làm việc nhẹ hoặc chụp hình."}</p>
-            <a class="btn soft small" href="#contact" data-contact-popover data-room-id="${room.id}">Nhắn đặt ${room.id}</a>
+            <a class="btn soft small" href="#contact" data-contact-popover data-room-id="${room.id}" data-duration="${item.label}">Nhắn đặt ${room.id}</a>
           </article>
         `).join("")}
       </div>
@@ -3466,6 +3515,13 @@ const renderRoomDetail = () => {
         <p class="section-kicker">Xung quanh stay</p>
         <h2>Vị trí và điểm kết nối gần đây.</h2>
       </div>
+
+      <div class="branch-map-embed" style="margin-bottom: 24px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(122,0,0,0.12);">
+        <iframe width="100%" height="280" style="border:0;" loading="lazy" allowfullscreen 
+          src="${detail.mapUrl}">
+        </iframe>
+      </div>
+
       <div class="nearby-grid">
         ${detail.nearby.map(item => `
           <article class="nearby-card">
@@ -3603,12 +3659,18 @@ const loadPublicRoomsFromSupabase = async () => {
         .sort((a,b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0] || null;
       const mappedPrices = (row.room_prices || []).filter(p => p.is_active !== false).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)).map(p => {
         const base = Number(p.base_price || 0);
-        const displayLabel = ({ day:"Ngày", night:"Qua đêm", "3h":"3 tiếng", "4h":"4 tiếng", "8h":"8 tiếng" })[p.package_code] || p.package_label;
+        let displayLabel = ({ day:"Ngày", night:"Qua đêm", "3h":"3 tiếng", "4h":"4 tiếng", "8h":"Qua đêm" })[p.package_code] || p.package_label;
+        if (displayLabel === "8 tiếng") displayLabel = "Qua đêm";
+        if (displayLabel === "Theo ngày" || displayLabel === "day") displayLabel = "Ngày";
         let sale = Number(p.sale_price || base);
         if (promotion?.discount_percent) sale = Math.round(base * (100 - Number(promotion.discount_percent)) / 100);
         else if (promotion?.discount_amount) sale = Math.max(0, base - Number(promotion.discount_amount));
         return { label:displayLabel, value:formatKPrice(sale / 1000), originalValue:sale < base ? formatKPrice(base / 1000) : "", basePrice:base, salePrice:sale };
       });
+      
+      const labelOrder = { "3 tiếng": 1, "4 tiếng": 2, "Qua đêm": 3, "Ngày": 4 };
+      mappedPrices.sort((a,b) => (labelOrder[a.label] || 99) - (labelOrder[b.label] || 99));
+
       return ({
       id: row.code,
       chapter: row.code?.split("-")?.[0]?.replace("C", "Chapter ") || "Chapter",

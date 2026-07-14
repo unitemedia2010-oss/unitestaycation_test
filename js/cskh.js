@@ -74,9 +74,9 @@ const formatMoneyWhileTyping = input => {
 const packageHours = () => ({
   "3 tiếng": 3,
   "4 tiếng": 4,
-  "8 tiếng": 8,
-  "Theo ngày": 16,
-  "Qua đêm": 12
+  "Qua đêm": 12,
+  "Ngày": 24,
+  "Theo ngày": 24
 }[$("#bookingPackage")?.value] || 3);
 
 const updateProofSummary = () => {
@@ -391,6 +391,7 @@ const renderBookings = () => {
         ${ago ? `<span style="font-size:12px;color:#999;margin-left:6px;">· ${ago}</span>` : ''}
         <p>${escape(booking.roomName)} · ${escape(booking.roomUnitName || booking.roomUnitCode || 'Chưa gán phòng')} · ${window.UniteOps.dateTime(booking.checkinAt)} → ${window.UniteOps.dateTime(booking.checkoutAt)}</p>
         <p>${escape(booking.source)} · <b style="${isNew ? 'color:#e53935;' : ''}">${cskhStatusLabel(booking.status)}</b> · ${escape(booking.assignedTo || '')}</p>
+        ${booking.note ? `<p style="color: #0056b3; font-weight: 500; font-size: 13px; background: #e3f2fd; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px;">Giờ nhận / Ghi chú: ${escape(booking.note)}</p>` : ''}
         <div class="booking-proof-row">
           ${depositProof
             ? `<button class="proof-pill ready" type="button" data-open-bill="deposit" data-booking-id="${escape(booking.id)}">Xem bill cọc</button>`
@@ -804,7 +805,7 @@ window.openCreateBookingModal = (bookingId = null) => {
   const isEdit = !!booking;
 
   const sourceOpts = window.UniteOps.sources?.map(s => `<option value="${s}" ${booking?.source === s ? 'selected' : ''}>${s}</option>`).join('') || '';
-  const packages = ['3 tiếng', '4 tiếng', '8 tiếng', 'Theo ngày', 'Qua đêm'];
+  const packages = ['3 tiếng', '4 tiếng', 'Qua đêm', 'Ngày'];
   const packageOpts = packages.map(s => `<option value="${s}" ${booking?.packageLabel === s ? 'selected' : ''}>${s}</option>`).join('');
 
   const branches = cskhBranches();
@@ -893,7 +894,7 @@ window.openCreateBookingModal = (bookingId = null) => {
         </fieldset>
         
         <div style="margin-top:4px;">
-           <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Ghi chú</label>
+           <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Giờ nhận phòng / Ghi chú</label>
            <textarea name="note" placeholder="Setup, giờ khách muốn nhận, yêu cầu đặc biệt..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;min-height:60px;">${escape(booking?.note || '')}</textarea>
         </div>
 
@@ -928,9 +929,8 @@ window.openCreateBookingModal = (bookingId = null) => {
     const pkg = packageSel.value;
     if (pkg === '3 tiếng') hrs = 3;
     else if (pkg === '4 tiếng') hrs = 4;
-    else if (pkg === '8 tiếng') hrs = 8;
-    else if (pkg === 'Theo ngày') hrs = 24;
-    else if (pkg === 'Qua đêm') hrs = 14;
+    else if (pkg === 'Qua đêm') hrs = 12;
+    else if (pkg === 'Ngày' || pkg === 'Theo ngày') hrs = 24;
     if (hrs > 0) {
       checkoutInput.value = window.UniteOps.addHoursLocal(checkinInput.value, hrs);
     }

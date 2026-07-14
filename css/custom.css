@@ -1967,17 +1967,17 @@ footer,
 }
 
 .contact-modal-channel {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 10px 12px;
+  display: flex;
   align-items: center;
-  min-width: 0;
-  padding: 13px;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
   border: 1px solid rgba(122, 0, 0, .12);
-  border-radius: 18px;
-  background: rgba(255,255,255,.58);
+  border-radius: 12px;
+  background: rgba(255,255,255,.78);
   color: var(--ink);
   transition: transform .16s ease, border-color .16s ease, background .16s ease;
+  text-align: center;
 }
 
 .contact-modal-channel:hover {
@@ -1987,32 +1987,27 @@ footer,
 }
 
 .contact-modal-channel span {
-  grid-row: span 2;
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  background: var(--dark-red);
-  color: var(--ivory);
-  font-size: 11px;
-  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--dark-red);
+}
+
+.contact-modal-channel span svg {
+  width: 20px;
+  height: 20px;
 }
 
 .contact-modal-channel strong {
-  min-width: 0;
   color: var(--ink);
-  font-family: var(--serif);
-  font-size: 24px;
-  line-height: 1;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .contact-modal-channel small {
-  min-width: 0;
-  color: var(--muted);
-  line-height: 1.45;
-  font-size: 12px;
-  font-weight: 700;
+  display: none;
 }
 
 .contact-modal-copy-note {
@@ -2960,7 +2955,7 @@ body[data-page="rooms"] {
   gap: 8px;
   padding: 22px;
   background:
-    linear-gradient(135deg, rgba(82,0,8,.78), rgba(122,0,0,.48)),
+    linear-gradient(to top, rgba(82,0,8,0.95) 0%, rgba(122,0,0,0.3) 60%, rgba(0,0,0,0) 100%),
     url("../img/C8-THE-ART/0.jpg") center/cover;
   color: var(--ivory);
 }
