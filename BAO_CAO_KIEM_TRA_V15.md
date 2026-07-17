@@ -1,10 +1,36 @@
-# BÁO CÁO KIỂM TRA — UNITE STAYCATION V15 AUDITED
+# BÁO CÁO KIỂM TRA — UNITE STAYCATION V15.4.2 AUDITED
 
 ## Kết luận
 
 Bản gốc có nền tảng giao diện và vận hành khá đầy đủ nhưng chưa nên đưa vào dùng thật ngay vì tồn tại lỗi phân quyền, dữ liệu phòng không đồng bộ giữa các trang, bill thanh toán công khai và một số CRUD không hoạt động đúng.
 
 Bản V15 đã được chỉnh để phù hợp giai đoạn **staging/kiểm thử có dữ liệu thật**. Trước production vẫn phải chạy checklist với Supabase và tài khoản thật.
+
+## Bổ sung V15.4.1
+
+- Tin nhắn liên hệ mang lịch check-in → check-out có cả ngày và giờ; link giữ tham số `checkin`, còn mẫu cũ dùng `{{date}}` được chuẩn hóa sang `{{schedule}}`.
+- CSKH có thể nhận cọc hoặc thu đủ trước khi xếp phòng cụ thể.
+- Booking chưa xếp phòng vẫn giữ một suất của layout; database dùng advisory lock để bảo vệ suất cuối khi nhiều CSKH thao tác đồng thời.
+- `Giữ phòng`/`Đã cọc`/`Đã thanh toán` bắt buộc có layout, còn check-in/check-out bắt buộc có phòng cụ thể.
+- Checklist bàn giao đã bổ sung kiểm thử sức chứa layout, thanh toán chưa xếp phòng, lịch tin nhắn, link và Quick Paste.
+
+Database đang vận hành chỉ có các luật này sau khi chạy `supabase/migration_v15_4_1_unassigned_payments.sql`. Việc file source đã được cập nhật không tự thay đổi database đã deploy trước đó.
+
+## Bổ sung V15.4.2
+
+- RPC `auto_assign_booking_room_unit` chạy nguyên tử trên database, khóa booking/layout, chọn unit đúng chi nhánh/layout và chống hai CSKH cùng giữ một phòng.
+- RPC dùng `updated_at` để từ chối snapshot cũ, giữ nguyên phòng do CSKH chọn thủ công nếu phòng vẫn hợp lệ và chỉ chọn phòng khác khi booking chưa có unit.
+- QuickPay tải lại booking live, tự xếp/kiểm tra phòng trước khi upload bill; hết phòng, stale data hoặc migration chưa chạy đều dừng trước bước lưu chứng từ.
+- Claim 15 phút bảo vệ luồng QuickPay; form `Sửa đơn` dùng CAS và bị booking guard chặn trong lúc QuickPay đang xử lý. Payment guard và RPC finalization ngăn hai CSKH cùng ghi bill hoặc cùng báo thu tiền.
+- Finalization nhả claim nguyên tử; cùng tab không thể đóng/mở chồng QuickPay khi bill đang được lưu hoặc nhả nhầm token giữa hai lượt.
+- Bill được giới hạn 15 MB; mất phiên giữa luồng không được rơi về dữ liệu local hoặc báo thành công giả.
+- Claim lưu dạng băm, token thô không lưu local; bill cũ chỉ bị xóa sau khi booking đã chốt sang bill mới.
+- Booking gắn phòng/layout lịch sử đã ẩn được giữ nguyên khi sửa và vẫn hiển thị trên lịch tuần.
+- Dữ liệu cũ ghi cọc bằng toàn bộ đơn được kế thừa bill có kiểm soát, không tạo giao dịch 0 đồng hoặc cộng tiền hai lần.
+- Booking dữ liệu cũ chưa có phòng cụ thể có nút `Tự xếp phòng`; sau khi thành công lịch chuyển khỏi hàng `Cần xếp phòng` sang đúng hàng P1/P2/P3.
+- Frontend của bản vá dùng cache revision `v15.4.6`.
+
+Database đã ở V15.4.1 phải chạy tiếp `supabase/migration_v15_4_2_auto_room_assignment.sql`. Source mới đã chứa RPC nhưng database đã deploy trước đó không tự cập nhật.
 
 ## Những phần đã kiểm tra
 
@@ -122,6 +148,6 @@ Dashboard giờ lấy số phòng thật từ Supabase và tính tỷ lệ lấp
 ## Mức sẵn sàng đề xuất
 
 - **Chạy local/demo:** đạt.
-- **Kết nối Supabase staging:** đạt sau khi điền config và chạy schema/migration.
+- **Kết nối Supabase staging:** đạt sau khi điền config và chạy đủ migration đến V15.4.2.
 - **Cho team test nội bộ:** đạt sau khi hoàn thành checklist.
 - **Đưa vào vận hành chính thức:** chỉ sau khi test quyền, booking trùng, bill private, backup Sheet và backup database.

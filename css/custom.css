@@ -1890,7 +1890,8 @@ footer,
   z-index: 1301;
   width: min(560px, calc(100vw - 28px));
   max-height: calc(100vh - 36px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: clamp(18px, 4vw, 28px);
   border: 1px solid rgba(122, 0, 0, .16);
   border-radius: 26px;
@@ -1957,6 +1958,64 @@ footer,
   line-height: 1.55;
   font-size: 13px;
   font-weight: 800;
+}
+
+.customer-booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.customer-booking-field {
+  display: grid;
+  gap: 6px;
+  color: var(--gray-brown);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.customer-booking-field > span {
+  letter-spacing: .02em;
+}
+
+.customer-booking-field input,
+.customer-booking-field textarea {
+  width: 100%;
+  min-height: 46px;
+  box-sizing: border-box;
+  border: 1px solid rgba(122, 0, 0, .14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .82);
+  padding: 11px 12px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.customer-booking-field textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.customer-booking-field input[readonly] {
+  background: rgba(122, 0, 0, .045);
+  color: var(--dark-red);
+}
+
+.customer-booking-time-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.customer-booking-time-hint {
+  margin: -3px 0 0;
+  color: var(--gray-brown);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .contact-modal-grid {
@@ -2032,6 +2091,10 @@ body.contact-modal-open {
   }
 
   .contact-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-booking-time-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -3776,6 +3839,10 @@ body[data-page="rooms"] {
   color: var(--gray-brown);
   font-size: 11px;
   font-weight: 900;
+}
+
+.smart-booking-grid label[hidden] {
+  display: none !important;
 }
 
 .smart-booking-grid label:first-child {

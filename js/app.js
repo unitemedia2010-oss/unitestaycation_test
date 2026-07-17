@@ -1152,13 +1152,61 @@ const applyLanguage = (lang = getStoredLanguage()) => {
   });
 };
 
-const toDateInputValue = (date = new Date()) => {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  const year = copy.getFullYear();
-  const month = String(copy.getMonth() + 1).padStart(2, "0");
-  const day = String(copy.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+const BOOKING_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+const bookingAsDate = (value = new Date()) => {
+  if (value instanceof Date) return new Date(value);
+  const text = String(value || "").trim();
+  const localMatch = text.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(?::(\d{2}))?$/);
+  return new Date(localMatch ? `${localMatch[1]}:${localMatch[2] || "00"}+07:00` : value);
+};
+
+const toDatetimeLocalValue = (value = new Date()) => {
+  const date = bookingAsDate(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+    timeZone: BOOKING_TIME_ZONE,
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+  }).formatToParts(date).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+};
+
+const toDateInputValue = (date = new Date()) => toDatetimeLocalValue(date).slice(0, 10);
+
+const bookingPackageHours = (label = "3 tiếng", nights = 1, roomId = "") => {
+  const value = String(label || "").trim().toLowerCase();
+  const room = roomId && typeof rooms !== "undefined" ? rooms.find(item => item.id === roomId) : null;
+  const price = room?.prices?.find(item => String(item.label || "").trim().toLowerCase() === value);
+  const configuredHours = Number(price?.durationHours || 0);
+  if (configuredHours > 0) {
+    return configuredHours + (value.includes("ngày") ? (Math.max(1, Number(nights || 1)) - 1) * 24 : 0);
+  }
+  if (value.startsWith("4")) return 4;
+  if (value.includes("qua đêm") || value.startsWith("8")) return 8;
+  if (value.includes("ngày")) return 16 + (Math.max(1, Number(nights || 1)) - 1) * 24;
+  return 3;
+};
+
+const bookingCheckoutDate = (checkinValue, packageLabel, nights = 1, roomId = "") => {
+  const checkin = bookingAsDate(checkinValue);
+  if (Number.isNaN(checkin.getTime())) return null;
+  return new Date(checkin.getTime() + bookingPackageHours(packageLabel, nights, roomId) * 60 * 60_000);
+};
+
+const defaultBookingCheckin = (context = {}) => {
+  const now = new Date();
+  const requested = bookingAsDate(context.checkinAt || "");
+  if (!Number.isNaN(requested.getTime()) && requested.getTime() > now.getTime() - 5 * 60_000) {
+    return toDatetimeLocalValue(requested);
+  }
+  const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(context.date || "") ? context.date : toDateInputValue(now);
+  const isLongStay = bookingPackageHours(context.packageLabel || context.duration, context.nights, context.roomId) >= 8;
+  let candidate = bookingAsDate(`${dateKey}T${isLongStay ? "20:00" : "14:00"}`);
+  if (candidate.getTime() <= now.getTime() + 30 * 60_000) {
+    const halfHour = 30 * 60_000;
+    candidate = new Date(Math.ceil((now.getTime() + 60 * 60_000) / halfHour) * halfHour);
+  }
+  return toDatetimeLocalValue(candidate);
 };
 
 const normalizeDestination = (value = "") => {
@@ -1193,7 +1241,7 @@ const defaultContactChannels = [
     label: "Zalo",
     url: "https://zalo.me/0902097755",
     note: "Nhắn Zalo chính, web tự copy nội dung phòng/ngày/gói.",
-    template: "Xin chào Unite, mình muốn hỏi {{room}} tại {{destination}}. Lịch mong muốn: {{date}}, {{duration}}, {{guests}}. Link mình đang xem: {{url}}"
+    template: "Xin chào Unite, mình muốn hỏi {{room}} tại {{destination}}. Lịch mong muốn: {{schedule}}, gói {{duration}}, {{guests}}. Link mình đang xem: {{url}}"
   },
   {
     id: "fanpage-main",
@@ -1202,7 +1250,7 @@ const defaultContactChannels = [
     label: "Fanpage chính",
     url: "https://www.facebook.com/share/1JYQHF6Ar5/?mibextid=wwXIfr",
     note: "Page chính Unite, phù hợp khách cần tư vấn chung.",
-    template: "Unite ơi, mình cần tư vấn stay: {{room}} - {{destination}} - {{date}} - {{duration}} - {{guests}}. Link: {{url}}"
+    template: "Unite ơi, mình cần tư vấn stay: {{room}} - {{destination}} - {{schedule}} - {{duration}} - {{guests}}. Link: {{url}}"
   },
   {
     id: "fanpage-le-van-sy",
@@ -1211,7 +1259,7 @@ const defaultContactChannels = [
     label: "Fanpage Lê Văn Sỹ",
     url: "https://www.facebook.com/share/1EHkc77PoC/?mibextid=wwXIfr",
     note: "Kênh riêng cho khách quan tâm khu Lê Văn Sỹ.",
-    template: "Unite Lê Văn Sỹ ơi, mình muốn hỏi {{room}}. Lịch: {{date}}, {{duration}}, {{guests}}. Link: {{url}}"
+    template: "Unite Lê Văn Sỹ ơi, mình muốn hỏi {{room}}. Lịch: {{schedule}}, {{duration}}, {{guests}}. Link: {{url}}"
   },
   {
     id: "fanpage-tay-ho",
@@ -1220,7 +1268,7 @@ const defaultContactChannels = [
     label: "Fanpage Tây Hồ",
     url: "https://www.facebook.com/share/18pevnKYqa/?mibextid=wwXIfr",
     note: "Kênh riêng cho khách quan tâm khu Tây Hồ.",
-    template: "Unite Tây Hồ ơi, mình muốn hỏi {{room}}. Lịch: {{date}}, {{duration}}, {{guests}}. Link: {{url}}"
+    template: "Unite Tây Hồ ơi, mình muốn hỏi {{room}}. Lịch: {{schedule}}, {{duration}}, {{guests}}. Link: {{url}}"
   },
   {
     id: "instagram",
@@ -1229,7 +1277,7 @@ const defaultContactChannels = [
     label: "Instagram",
     url: "https://www.instagram.com/unite_staycation/",
     note: "Phù hợp khách xem ảnh rồi nhắn DM.",
-    template: "Hi Unite, mình muốn hỏi phòng/stay này: {{room}}. Thời gian: {{date}}, {{duration}}, {{guests}}. Link: {{url}}"
+    template: "Hi Unite, mình muốn hỏi phòng/stay này: {{room}}. Thời gian: {{schedule}}, {{duration}}, {{guests}}. Link: {{url}}"
   },
   {
     id: "hotline",
@@ -1238,14 +1286,29 @@ const defaultContactChannels = [
     label: "Hotline",
     url: "tel:0902097755",
     note: "Gọi nhanh khi khách cần xác nhận gấp.",
-    template: "Khách muốn hỏi {{room}} tại {{destination}}, {{date}}, {{duration}}, {{guests}}."
+    template: "Khách muốn hỏi {{room}} tại {{destination}}, {{schedule}}, {{duration}}, {{guests}}."
   }
 ];
+
+const normalizeContactTemplate = (template = "") => {
+  const text = String(template || "");
+  if (!text || /\{\{(?:schedule|time|checkinAt|checkoutAt)\}\}/.test(text)) return text;
+  return text.includes("{{date}}") ? text.replace(/\{\{date\}\}/g, "{{schedule}}") : text;
+};
 
 const readContactChannels = () => {
   try {
     const stored = JSON.parse(localStorage.getItem(CONTACT_CHANNEL_STORAGE_KEY) || "null");
-    if (Array.isArray(stored) && stored.length) return stored;
+    if (Array.isArray(stored) && stored.length) {
+      const normalized = stored.map(channel => ({
+        ...channel,
+        template: normalizeContactTemplate(channel.template)
+      }));
+      if (JSON.stringify(normalized) !== JSON.stringify(stored)) {
+        localStorage.setItem(CONTACT_CHANNEL_STORAGE_KEY, JSON.stringify(normalized));
+      }
+      return normalized;
+    }
   } catch {
     // Fall back to defaults below.
   }
@@ -1260,34 +1323,104 @@ const writeContactChannels = (channels) => {
   }
 };
 
+const formatContactMoment = (value = "") => {
+  const date = bookingAsDate(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: BOOKING_TIME_ZONE,
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  }).format(date);
+};
+
+const formatContactTime = (value = "") => {
+  const date = bookingAsDate(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: BOOKING_TIME_ZONE,
+    hour: "2-digit", minute: "2-digit"
+  }).format(date);
+};
+
+const formatContactDate = (dateKey = "") => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return dateKey || "chưa chọn ngày";
+  const date = bookingAsDate(`${dateKey}T00:00`);
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: BOOKING_TIME_ZONE,
+    day: "2-digit", month: "2-digit", year: "numeric"
+  }).format(date);
+};
+
+const buildContactContextUrl = (context = {}) => {
+  try {
+    const url = new URL(context.url || window.location.href);
+    if (context.roomId && context.roomId !== "chưa chọn") url.searchParams.set("id", context.roomId);
+    if (context.destination) {
+      url.searchParams.set("destination", context.destination === "Tất cả địa điểm" ? "all" : context.destination);
+    }
+    if (context.date) url.searchParams.set("date", context.date);
+    if (context.packageLabel) url.searchParams.set("duration", context.packageLabel);
+    url.searchParams.set("adults", String(Math.max(1, Number(context.adults || 1))));
+    url.searchParams.set("children", String(Math.max(0, Number(context.children || 0))));
+    if (context.checkinAt) url.searchParams.set("checkin", context.checkinAt);
+    else url.searchParams.delete("checkin");
+    if (context.packageLabel === "Ngày") {
+      url.searchParams.set("nights", String(Math.max(1, Number(context.nights || 1))));
+      if (context.checkoutAt) url.searchParams.set("checkout", context.checkoutAt.slice(0, 10));
+    } else {
+      url.searchParams.delete("nights");
+      url.searchParams.delete("checkout");
+    }
+    return url.toString();
+  } catch {
+    return context.url || window.location.href;
+  }
+};
+
 const getContactContext = (overrides = {}) => {
   const params = new URLSearchParams(window.location.search);
   const stored = readStoredSmartBooking();
   const roomId = overrides.roomId || overrides.room || params.get("id") || params.get("room") || stored.room || "";
   const room = typeof rooms !== "undefined" ? rooms.find(item => item.id === roomId) : null;
   const destination = normalizeDestination(overrides.destination || params.get("destination") || room?.location || stored.destination || "Tất cả địa điểm");
-  const date = overrides.date || params.get("date") || stored.date || toDateInputValue();
-  const duration = overrides.duration || params.get("duration") || stored.duration || "3 tiếng";
+  const duration = overrides.packageLabel || overrides.duration || params.get("duration") || stored.duration || "3 tiếng";
   const nights = Math.max(1, Number(overrides.nights || params.get("nights") || stored.nights || 1));
-  const adults = Number(overrides.adults || params.get("adults") || stored.adults || 2);
-  const children = Number(overrides.children || params.get("children") || stored.children || 0);
+  const adults = Number(overrides.adults ?? params.get("adults") ?? stored.adults ?? 2);
+  const children = Number(overrides.children ?? params.get("children") ?? stored.children ?? 0);
+  const checkinAt = overrides.checkinAt || params.get("checkin") || params.get("checkinAt") || stored.checkinAt || "";
+  const date = overrides.date || (/^\d{4}-\d{2}-\d{2}T/.test(checkinAt) ? checkinAt.slice(0, 10) : "") || params.get("date") || stored.date || toDateInputValue();
   const guests = `${Math.max(1, adults)} người lớn${children > 0 ? `, ${children} trẻ em` : ""}`;
   const durationText = duration === "Ngày" ? `Theo ngày · ${nights} đêm` : duration;
+  const checkout = checkinAt ? bookingCheckoutDate(checkinAt, duration, nights, room?.id || roomId) : null;
+  const checkoutAt = checkout ? toDatetimeLocalValue(checkout) : "";
+  const schedule = checkinAt && checkoutAt
+    ? `${formatContactMoment(checkinAt)} → ${formatContactMoment(checkoutAt)}`
+    : `${formatContactDate(date)} · chưa chọn giờ`;
 
-  return {
+  const context = {
     room: room ? `${room.name} (${room.id})` : (roomId ? `mã ${roomId}` : "chưa chọn phòng cụ thể"),
     roomId: room?.id || roomId || "chưa chọn",
     destination: destination === "all" ? "Tất cả địa điểm" : destination,
     date,
+    dateLabel: formatContactDate(date),
+    checkinAt,
+    checkoutAt,
+    time: formatContactTime(checkinAt),
+    schedule,
+    packageLabel: duration,
     duration: durationText,
     nights,
+    adults,
+    children,
     guests,
     url: overrides.url || window.location.href
   };
+  context.url = buildContactContextUrl(context);
+  return context;
 };
 
 const fillContactTemplate = (template = "", context = getContactContext()) => {
-  const fallback = "🔖 [YÊU CẦU ĐẶT PHÒNG]\n- Phòng: {{room}}\n- Chi nhánh: {{destination}}\n- Ngày nhận: {{date}}\n- Gói: {{duration}}\n- Khách: {{guests}}\n\nXin chào Unite, mình muốn đặt phòng này. (Link: {{url}})";
+  const fallback = "🔖 [YÊU CẦU ĐẶT PHÒNG]\n- Phòng: {{room}}\n- Chi nhánh: {{destination}}\n- Lịch: {{schedule}}\n- Gói: {{duration}}\n- Khách: {{guests}}\n\nXin chào Unite, mình muốn đặt phòng này. (Link: {{url}})";
   return (template || fallback).replace(/\{\{(\w+)\}\}/g, (_, key) => context[key] ?? "");
 };
 
@@ -1393,17 +1526,36 @@ const ensureContactModal = () => {
         <div id="contactModalDetails" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:6px;"></div>
       </div>
       
-      <form id="customerBookingForm" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
-        <input type="text" name="customerName" placeholder="Họ và tên của bạn *" required style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px;">
-        <input type="tel" name="phone" placeholder="Số điện thoại / Zalo *" required style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px;">
-        <label style="font-size:14px; font-weight:500; margin-bottom: 4px; display:block; color: var(--text-dark, #333);">Chọn ngày và giờ nhận phòng:</label>
-        <input type="datetime-local" name="note" required style="padding: 12px; border: 1px solid var(--border, #ddd); border-radius: 8px; font-family: inherit; font-size: 15px; width: 100%; box-sizing: border-box;">
+      <form id="customerBookingForm" class="customer-booking-form">
+        <label class="customer-booking-field">
+          <span>Họ và tên *</span>
+          <input type="text" name="customerName" autocomplete="name" placeholder="Tên người đặt phòng" required>
+        </label>
+        <label class="customer-booking-field">
+          <span>Số Zalo / WhatsApp *</span>
+          <input type="tel" name="phone" autocomplete="tel" inputmode="tel" minlength="8" maxlength="20" placeholder="Ví dụ: 0902 097 755 hoặc +84..." required>
+        </label>
+        <div class="customer-booking-time-grid">
+          <label class="customer-booking-field">
+            <span>Ngày & giờ nhận *</span>
+            <input type="datetime-local" name="checkinAt" required>
+          </label>
+          <label class="customer-booking-field">
+            <span>Trả phòng dự kiến</span>
+            <input type="text" name="checkoutPreview" readonly aria-readonly="true">
+          </label>
+        </div>
+        <p class="customer-booking-time-hint" id="customerBookingTimeHint" aria-live="polite"></p>
+        <label class="customer-booking-field">
+          <span>Ghi chú (nếu có)</span>
+          <textarea name="customerNote" rows="2" maxlength="500" placeholder="Giờ đến dự kiến, setup hoặc yêu cầu cần CSKH hỗ trợ..."></textarea>
+        </label>
         <button type="submit" class="btn primary" id="submitCustomerBookingBtn" style="margin-top: 8px; padding: 14px; font-size: 16px; border-radius: 8px;">Gửi yêu cầu đặt phòng</button>
       </form>
       
       <div id="bookingSuccessMsg" style="display: none; background: #e8f5e9; color: #2e7d32; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
         <h3 style="margin: 0 0 8px 0; font-size: 16px;">🎉 Đã gửi yêu cầu!</h3>
-        <p style="margin: 0; font-size: 14px; line-height: 1.5;">Đội ngũ Unite sẽ liên hệ qua Zalo/SĐT của bạn trong ít phút để xác nhận lịch và hỗ trợ giữ phòng.</p>
+        <p id="bookingSuccessCopy" style="margin: 0; font-size: 14px; line-height: 1.5;">Đội ngũ Unite sẽ liên hệ qua Zalo/WhatsApp trong ít phút để xác nhận lịch và hỗ trợ giữ phòng.</p>
       </div>
 
       <div style="border-top: 1px solid #eaeaea; margin: 0 -24px; padding: 24px 24px 0;">
@@ -1424,9 +1576,15 @@ const ensureContactModal = () => {
     btn.disabled = true;
     btn.textContent = "Đang gửi...";
     try {
-      await window.submitCustomerBookingAsync(window.currentBookingContext, e.target);
+      const result = await window.submitCustomerBookingAsync(window.currentBookingContext, e.target);
       $("#customerBookingForm").style.display = "none";
       $("#bookingSuccessMsg").style.display = "block";
+      const successCopy = $("#bookingSuccessCopy");
+      if (successCopy) {
+        successCopy.textContent = result?.publicCode
+          ? `Mã yêu cầu ${result.publicCode}. Unite sẽ liên hệ qua Zalo/WhatsApp để xác nhận lịch và phòng cụ thể.`
+          : "Unite sẽ liên hệ qua Zalo/WhatsApp để xác nhận lịch và phòng cụ thể.";
+      }
     } catch (err) {
       alert("Có lỗi xảy ra: " + err.message);
       btn.disabled = false;
@@ -1443,47 +1601,88 @@ window.submitCustomerBookingAsync = async (context, form) => {
   const anonKey = cfg.anonKey || cfg.publishableKey;
   if (!baseUrl || !anonKey) throw new Error("Hệ thống chưa cấu hình kết nối.");
 
-  let checkinAt = new Date().toISOString();
-  let checkoutAt = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+  const customerName = form.customerName.value.trim();
+  const contact = form.phone.value.trim();
+  const checkin = bookingAsDate(form.checkinAt.value);
+  const packageLabel = context.packageLabel || context.duration || "3 tiếng";
+  const checkout = bookingCheckoutDate(form.checkinAt.value, packageLabel, context.nights, context.roomId);
+  if (!customerName || !contact) throw new Error("Vui lòng nhập họ tên và số Zalo/WhatsApp.");
+  if (Number.isNaN(checkin.getTime()) || !checkout) throw new Error("Ngày giờ nhận phòng chưa hợp lệ.");
+  if (checkin.getTime() < Date.now() - 5 * 60_000) throw new Error("Giờ nhận phòng không thể nằm trong quá khứ.");
 
-  if (context.date) {
-    const d = new Date(context.date + "T14:00:00");
-    if (!Number.isNaN(d.getTime())) {
-      checkinAt = d.toISOString();
-      const out = new Date(d);
-      out.setHours(d.getHours() + 3);
-      checkoutAt = out.toISOString();
-    }
+  const requestHeaders = {
+    apikey: anonKey,
+    Authorization: `Bearer ${anonKey}`,
+    "Content-Type": "application/json"
+  };
+  const roomCode = context.roomId && context.roomId !== "chưa chọn" ? context.roomId : "";
+  let roomType = null;
+  if (roomCode) {
+    const roomQuery = new URLSearchParams({ select: "id,branch_id,code,name", code: `eq.${roomCode}`, limit: "1" });
+    const roomResponse = await fetch(`${baseUrl}/rest/v1/room_types?${roomQuery.toString()}`, { headers: requestHeaders });
+    if (roomResponse.ok) roomType = (await roomResponse.json())?.[0] || null;
   }
 
   const payload = {
-    customer_name: form.customerName.value,
-    customer_phone: form.phone.value,
-    customer_note: form.note.value,
+    customer_name: customerName,
+    customer_phone: contact,
+    customer_note: form.customerNote.value.trim() || null,
     status: "new",
     source_code: "website",
-    package_label: context.duration || "3 tiếng",
-    guests: Number(String(context.guests).match(/\d+/)?.[0] || 2),
-    internal_note: "Phòng: " + context.room + " | Chi nhánh: " + context.destination + " | Khách: " + context.guests,
-    checkin_at: checkinAt,
-    checkout_at: checkoutAt
+    branch_id: roomType?.branch_id || null,
+    room_type_id: roomType?.id || null,
+    package_label: packageLabel,
+    guests: Math.max(1, Number(context.adults || 1) + Math.max(0, Number(context.children || 0))),
+    internal_note: "Yêu cầu web V15.4 | Phòng: " + context.room + " | Chi nhánh: " + context.destination + " | Khách: " + context.guests,
+    checkin_at: checkin.toISOString(),
+    checkout_at: checkout.toISOString()
   };
 
-  const res = await fetch(`${baseUrl}/rest/v1/bookings`, {
+  const rpcPayload = {
+    p_customer_name: customerName,
+    p_contact: contact,
+    p_checkin_at: checkin.toISOString(),
+    p_checkout_at: checkout.toISOString(),
+    p_room_code: roomCode || null,
+    p_package_label: packageLabel,
+    p_guests: payload.guests,
+    p_customer_note: payload.customer_note
+  };
+  const rpcResponse = await fetch(`${baseUrl}/rest/v1/rpc/create_public_booking_request`, {
     method: "POST",
-    headers: {
-      "apikey": anonKey,
-      "Authorization": `Bearer ${anonKey}`,
-      "Content-Type": "application/json",
-      "Prefer": "return=minimal"
-    },
-    body: JSON.stringify(payload)
+    headers: requestHeaders,
+    body: JSON.stringify(rpcPayload)
   });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt || res.statusText);
+  if (rpcResponse.ok) {
+    const result = await rpcResponse.json();
+    const row = Array.isArray(result) ? result[0] : result;
+    return { publicCode: row?.public_code || row?.publicCode || "", checkinAt: payload.checkin_at, checkoutAt: payload.checkout_at };
   }
+
+  const rpcErrorText = await rpcResponse.text();
+  let rpcMissing = rpcResponse.status === 404;
+  try { rpcMissing ||= JSON.parse(rpcErrorText)?.code === "PGRST202"; } catch {}
+  if (!rpcMissing) throw new Error(rpcErrorText || "Không gửi được yêu cầu đặt phòng.");
+
+  // Tương thích deployment V15 hiện tại. Sau khi chạy migration V15.4, RPC phía trên là đường chính an toàn hơn.
+  const directResponse = await fetch(`${baseUrl}/rest/v1/bookings?select=public_code`, {
+    method: "POST",
+    headers: { ...requestHeaders, Prefer: "return=representation" },
+    body: JSON.stringify(payload)
+  });
+  if (!directResponse.ok) {
+    const text = await directResponse.text();
+    let directErrorCode = "";
+    try { directErrorCode = JSON.parse(text)?.code || ""; } catch {}
+    if ([401, 403].includes(directResponse.status) || directErrorCode === "42501") {
+      console.warn("Public booking fallback bị Supabase RLS từ chối; cần chạy migration V15.4.", text);
+      throw new Error("Kênh đặt phòng trực tuyến đang được cập nhật. Yêu cầu này chưa được gửi; vui lòng nhắn Zalo/WhatsApp để CSKH giữ lịch giúp bạn.");
+    }
+    throw new Error(text || directResponse.statusText);
+  }
+  const directRows = await directResponse.json();
+  return { publicCode: directRows?.[0]?.public_code || "", checkinAt: payload.checkin_at, checkoutAt: payload.checkout_at };
 };
 
 const openContactModal = (context = getContactContext()) => {
@@ -1493,56 +1692,83 @@ const openContactModal = (context = getContactContext()) => {
   const grid = $("#contactModalChannels");
   
   const destStr = (context.destination || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const branchChannelKey = destStr.includes("phan tay ho")
+    ? "tay ho"
+    : destStr.includes("le van sy") || destStr.includes("le van si")
+      ? "le van sy"
+      : "";
   const channels = enabledContactChannels().filter(ch => {
     const lbl = (ch.label || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     if (destStr && destStr !== "tat ca dia diem") {
       if (lbl.includes("fanpage") && !lbl.includes("chinh") && lbl !== "fanpage") {
-        return lbl.includes(destStr);
+        return Boolean(branchChannelKey && lbl.includes(branchChannelKey));
       }
     }
     return true;
   });
   
-  window.currentBookingContext = context;
-
   const details = $("#contactModalDetails");
-  if (details) {
-    const tags = [
-      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>`, text: context.room },
-      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`, text: context.destination },
-      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`, text: context.date },
-      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`, text: context.duration },
-      { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`, text: context.guests }
-    ].filter(t => t.text && !t.text.includes("chưa chọn"));
-    details.innerHTML = tags.map(t => `<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(122,0,0,0.06); color:var(--dark-red); padding:4px 8px; border-radius:4px; font-size:13px; font-weight:600; white-space:nowrap;">${t.icon} ${t.text}</span>`).join("");
-  }
-
-  const datetimeInput = document.querySelector("#customerBookingForm input[name='note']");
-  if (datetimeInput) {
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    let defaultDateTime = now.toISOString().slice(0, 16);
-    if (context.date && context.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      defaultDateTime = `${context.date}T${defaultDateTime.split('T')[1]}`;
+  const renderModalContext = liveContext => {
+    window.currentBookingContext = liveContext;
+    if (details) {
+      const tags = [
+        { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>`, text: liveContext.room },
+        { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`, text: liveContext.destination },
+        { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`, text: liveContext.schedule },
+        { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`, text: liveContext.duration },
+        { icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`, text: liveContext.guests }
+      ].filter(t => t.text && !t.text.includes("chưa chọn"));
+      details.innerHTML = tags.map(t => `<span style="display:inline-flex; align-items:center; gap:4px; background:rgba(122,0,0,0.06); color:var(--dark-red); padding:4px 8px; border-radius:4px; font-size:13px; font-weight:600; white-space:nowrap;">${t.icon} ${escapeHTML(t.text)}</span>`).join("");
     }
-    datetimeInput.value = defaultDateTime;
-  }
 
-  if (grid) {
-    grid.innerHTML = channels.length
-      ? channels.map(channel => contactChannelHTML(channel, context, "contact-modal-channel")).join("")
-      : `
-        <div class="empty-state contact-empty" style="margin:0;padding:12px;">
-          <h3 style="margin:0 0 4px;font-size:14px;">Chưa bật kênh liên hệ</h3>
-          <p style="margin:0;font-size:13px;">Vào admin để bật kênh nhắn tin.</p>
-        </div>
-      `;
-  }
+    if (grid) {
+      grid.innerHTML = channels.length
+        ? channels.map(channel => contactChannelHTML(channel, liveContext, "contact-modal-channel")).join("")
+        : `
+          <div class="empty-state contact-empty" style="margin:0;padding:12px;">
+            <h3 style="margin:0 0 4px;font-size:14px;">Chưa bật kênh liên hệ</h3>
+            <p style="margin:0;font-size:13px;">Vào admin để bật kênh nhắn tin.</p>
+          </div>
+        `;
+    }
+  };
+  renderModalContext(context);
 
-  // Reset form when reopening
-  $("#customerBookingForm").style.display = "flex";
-  $("#customerBookingForm").reset();
+  const bookingForm = $("#customerBookingForm");
+  bookingForm.style.display = "flex";
+  bookingForm.reset();
   $("#bookingSuccessMsg").style.display = "none";
+  const checkinInput = bookingForm.checkinAt;
+  const checkoutPreview = bookingForm.checkoutPreview;
+  const timeHint = $("#customerBookingTimeHint");
+  const syncCheckoutPreview = () => {
+    const liveContext = getContactContext({
+      ...context,
+      date: checkinInput.value?.slice(0, 10) || context.date,
+      checkinAt: checkinInput.value
+    });
+    const checkout = bookingCheckoutDate(checkinInput.value, liveContext.packageLabel || liveContext.duration, liveContext.nights, liveContext.roomId);
+    if (!checkout) {
+      checkoutPreview.value = "Chọn giờ nhận trước";
+      if (timeHint) timeHint.textContent = "Chọn đúng giờ bạn muốn nhận phòng để CSKH kiểm tra lịch.";
+      renderModalContext(liveContext);
+      return;
+    }
+    checkoutPreview.value = new Intl.DateTimeFormat("vi-VN", {
+      timeZone: BOOKING_TIME_ZONE,
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+    }).format(checkout);
+    if (timeHint) {
+      const hours = bookingPackageHours(liveContext.packageLabel || liveContext.duration, liveContext.nights, liveContext.roomId);
+      timeHint.textContent = `Gói ${liveContext.duration || liveContext.packageLabel} · ${hours} giờ. Giờ trả được tính tự động và CSKH sẽ xác nhận lại.`;
+    }
+    renderModalContext(liveContext);
+  };
+  checkinInput.min = toDatetimeLocalValue(new Date());
+  checkinInput.value = defaultBookingCheckin(context);
+  checkinInput.oninput = syncCheckoutPreview;
+  checkinInput.onchange = syncCheckoutPreview;
+  syncCheckoutPreview();
   const btn = $("#submitCustomerBookingBtn");
   if (btn) {
     btn.disabled = false;
@@ -2297,6 +2523,15 @@ const initHomeBookingWidget = () => {
     });
 
     updateGuestControls();
+    writeStoredSmartBooking({
+      destination: state.destination,
+      date: toDateKey(state.selectedDate),
+      duration: state.duration,
+      nights: state.nights,
+      adults: state.adults,
+      children: state.children,
+      room: bar.dataset.roomId || ""
+    });
     applyLanguage(getStoredLanguage());
   };
 
@@ -2432,6 +2667,20 @@ const initHomeBookingWidget = () => {
   });
 
   $("#bookingSearchBtn")?.addEventListener("click", () => {
+    if (bar.dataset.bookingContext === "room" && bar.dataset.roomId) {
+      closePanels();
+      openContactModal(getContactContext({
+        roomId: bar.dataset.roomId,
+        destination: state.destination,
+        date: toDateKey(state.selectedDate),
+        duration: state.duration,
+        nights: state.nights,
+        adults: state.adults,
+        children: state.children
+      }));
+      return;
+    }
+
     const note = $("#bookingResultNote");
     if (note) {
       const place = state.destination === "all" ? "tất cả địa điểm" : state.destinationLabel;
@@ -2527,7 +2776,7 @@ const initSmartBookingDock = () => {
               <option value="Ngày">Theo ngày</option>
             </select>
           </label>
-          <label id="smartNightsLabel">
+          <label id="smartNightsLabel" hidden>
             <span>Số đêm</span>
             <select id="smartNights">
               ${Array.from({ length: 14 }, (_, index) => `<option value="${index + 1}">${index + 1} đêm</option>`).join("")}
@@ -2643,8 +2892,12 @@ const initSmartBookingDock = () => {
     const stayText = state.duration === "Ngày" ? `${durationLabel(state.duration)} · ${state.nights} đêm` : durationLabel(state.duration);
     summary.textContent = `${place} · ${formatShortDate(state.date)} · ${stayText} · ${state.adults} NL${childText}`;
     children.disabled = state.adults >= 2;
-    if (nightsLabel) nightsLabel.hidden = state.duration !== "Ngày";
-    if (nights) nights.disabled = state.duration !== "Ngày";
+    const showNights = state.duration === "Ngày";
+    if (nightsLabel) {
+      nightsLabel.hidden = !showNights;
+      nightsLabel.setAttribute("aria-hidden", String(!showNights));
+    }
+    if (nights) nights.disabled = !showNights;
     writeStoredSmartBooking(state);
   };
 
@@ -2682,10 +2935,7 @@ const initSmartBookingDock = () => {
     search.set("duration", state.duration);
     if (state.duration === "Ngày") {
       search.set("nights", String(state.nights));
-      const [year, month, day] = state.date.split("-").map(Number);
-      const checkout = new Date(year, month - 1, day);
-      checkout.setDate(checkout.getDate() + state.nights);
-      search.set("checkout", toDateInputValue(checkout));
+      search.set("checkout", addDaysToDateKey(state.date, state.nights));
     }
     search.set("adults", String(state.adults));
     search.set("children", String(state.children));
@@ -2727,10 +2977,13 @@ const formatSearchDate = (key) => {
 
 const addDaysToDateKey = (key, days = 1) => {
   const [year, month, day] = String(key || "").split("-").map(Number);
-  const date = new Date(year, month - 1, day);
+  const date = new Date(Date.UTC(year, month - 1, day));
   if (Number.isNaN(date.getTime())) return "";
-  date.setDate(date.getDate() + days);
-  return toDateInputValue(date);
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+  const nextYear = date.getUTCFullYear();
+  const nextMonth = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const nextDay = String(date.getUTCDate()).padStart(2, "0");
+  return `${nextYear}-${nextMonth}-${nextDay}`;
 };
 
 const formatKPrice = (value) => {
@@ -2944,7 +3197,7 @@ const adminContactChannelHTML = (channel) => `
       <label class="admin-contact-template">Mẫu tin nhắn tự copy
         <textarea data-contact-field="template" rows="3">${escapeHTML(channel.template || "")}</textarea>
       </label>
-      <p class="admin-contact-help">Biến dùng được: {{room}}, {{roomId}}, {{destination}}, {{date}}, {{duration}}, {{nights}}, {{guests}}, {{url}}</p>
+      <p class="admin-contact-help">Biến dùng được: {{room}}, {{roomId}}, {{destination}}, {{date}}, {{time}}, {{schedule}}, {{checkinAt}}, {{checkoutAt}}, {{duration}}, {{nights}}, {{guests}}, {{url}}</p>
     </div>
     <button class="btn soft small admin-contact-delete" type="button" data-contact-action="delete">Xóa</button>
   </article>
@@ -3093,7 +3346,7 @@ const initAdminTools = () => {
       label: "Kênh mới",
       url: "",
       note: "Nhấn để nhắn kèm thông tin phòng.",
-      template: "Xin chào Unite, mình muốn hỏi {{room}} tại {{destination}}, {{date}}, {{duration}}, {{guests}}. Link: {{url}}"
+      template: "Xin chào Unite, mình muốn hỏi {{room}} tại {{destination}}, {{schedule}}, {{duration}}, {{guests}}. Link: {{url}}"
     });
     writeContactChannels(channels);
     renderAdminContactTools();
@@ -3631,7 +3884,7 @@ const loadPublicRoomsFromSupabase = async () => {
     const select = [
       "id","code","name","category","price_tier","vibe","short_line","description","inventory_count","status","is_published","sort_order",
       "branches(name,area,public_address)",
-      "room_prices(package_label,base_price,sale_price,sort_order,is_active)",
+      "room_prices(package_code,package_label,duration_hours,base_price,sale_price,sort_order,is_active)",
       "room_images(storage_path,public_url,sort_order,is_cover,is_active)",
       "promotions(title,discount_percent,discount_amount,badge_label,show_badge,starts_at,ends_at,is_active,created_at)"
     ].join(",");
@@ -3665,7 +3918,7 @@ const loadPublicRoomsFromSupabase = async () => {
         let sale = Number(p.sale_price || base);
         if (promotion?.discount_percent) sale = Math.round(base * (100 - Number(promotion.discount_percent)) / 100);
         else if (promotion?.discount_amount) sale = Math.max(0, base - Number(promotion.discount_amount));
-        return { label:displayLabel, value:formatKPrice(sale / 1000), originalValue:sale < base ? formatKPrice(base / 1000) : "", basePrice:base, salePrice:sale };
+        return { label:displayLabel, packageCode:p.package_code || "", durationHours:Number(p.duration_hours || 0), value:formatKPrice(sale / 1000), originalValue:sale < base ? formatKPrice(base / 1000) : "", basePrice:base, salePrice:sale };
       });
       
       const labelOrder = { "3 tiếng": 1, "4 tiếng": 2, "Qua đêm": 3, "Ngày": 4 };

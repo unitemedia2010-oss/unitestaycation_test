@@ -6,8 +6,8 @@
   <title>CSKH booking | Unite Staycation</title>
   <meta name="description" content="Giao diện chăm sóc khách hàng, cập nhật booking đa kênh và quản lý lịch giữ phòng của Unite Staycation." />
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/custom.css?v=v15.3" />
-  <link rel="stylesheet" href="css/ops.css?v=v15.3" />
+  <link rel="stylesheet" href="css/custom.css?v=v15.4" />
+  <link rel="stylesheet" href="css/ops.css?v=v15.4" />
 </head>
 <body data-page="cskh">
   <header class="site-header" id="siteHeader">
@@ -46,13 +46,23 @@
       </div>
     </section>
 
-
+    <section class="ops-panel" aria-labelledby="quickPasteTitle">
+      <div class="ops-actions" style="align-items:flex-end;justify-content:space-between;gap:14px;">
+        <div style="flex:1;min-width:min(100%,360px);">
+          <span class="panel-kicker">Quick Paste</span>
+          <h2 id="quickPasteTitle" style="margin-bottom:6px;">Dán tin nhắn để điền lịch</h2>
+          <p class="sync-note" style="margin:0 0 8px;">Hệ thống đọc phòng, chi nhánh, gói, số khách và đúng giờ check-in → check-out; CSKH chỉ cần bổ sung tên và số liên hệ.</p>
+          <textarea id="quickPasteInput" rows="3" placeholder="Dán nội dung khách gửi từ Zalo/Fanpage..." style="width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+        <button class="btn primary" type="button" id="quickPasteBtn" style="white-space:nowrap;">Điền vào đơn mới</button>
+      </div>
+    </section>
 
     <section class="ops-panel booking-queue-panel">
       <div class="ops-actions" style="justify-content:space-between">
         <div><span class="panel-kicker">Booking queue</span><h2>Danh sách CSKH</h2></div>
         <div class="ops-toolbar">
-          <label>Tìm<input id="cskhSearch" type="search" placeholder="Tên, SĐT, mã phòng"></label>
+          <label>Tìm<input id="cskhSearch" type="search" placeholder="Tên, Zalo/WhatsApp, mã phòng"></label>
           <label>Trạng thái<select id="cskhStatusFilter"><option value="all">Tất cả</option></select></label>
           <label>Nguồn<select id="cskhSourceFilter"><option value="all">Tất cả</option></select></label>
           <button type="button" class="btn primary" onclick="window.openCreateBookingModal()" style="margin-top:auto;white-space:nowrap;">+ Tạo đơn mới</button>
@@ -81,12 +91,12 @@
     </section>
   </main>
 
-  <script src="js/supabase-config.js?v=v15.3"></script>
-  <script src="js/auth-guard.js?v=v15.3"></script>
-  <script src="js/rooms.js?v=v15.3"></script>
-  <script src="js/ops-data.js?v=v15.3"></script>
+  <script src="js/supabase-config.js?v=v15.4"></script>
+  <script src="js/auth-guard.js?v=v15.4"></script>
+  <script src="js/rooms.js?v=v15.4"></script>
+<script src="js/ops-data.js?v=v15.4.6"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="js/cskh.js?v=v15.3"></script>
+<script src="js/cskh.js?v=v15.4.6"></script>
 <script src="js/admin-unified.js?v=v15"></script>
 </body>
 </html>
