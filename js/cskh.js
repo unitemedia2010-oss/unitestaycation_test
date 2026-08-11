@@ -240,8 +240,8 @@ const renderSelects = () => {
   const sourceValue = $("#bookingSource")?.value;
   const statusValue = $("#bookingStatus")?.value;
   const branchValue = $("#bookingBranch")?.value;
-  const statusFilterValue = $("#cskhStatusFilter")?.value || cskhState.status;
-  const sourceFilterValue = $("#cskhSourceFilter")?.value || cskhState.source;
+  const statusFilterValue = cskhState.status || $("#cskhStatusFilter")?.value || "all";
+  const sourceFilterValue = cskhState.source || $("#cskhSourceFilter")?.value || "all";
   const calendarBranchValue = $("#calendarBranch")?.value || cskhState.calendarBranch;
 
   if ($("#bookingSource")) $("#bookingSource").innerHTML = cskhSources().map(source => `<option value="${escape(source)}">${escape(source)}</option>`).join("");
@@ -537,6 +537,17 @@ const renderCalendar = () => {
   const historicalCount = weekBookings.filter(booking => booking.roomUnitCode && !knownUnitCodes.has(booking.roomUnitCode)).length;
   const summary = `<div class="calendar-summary"><b>${weekBookings.length} lịch trong tuần</b><span><i class="pending"></i>${pendingCount} chờ xử lý</span><span><i class="unassigned"></i>${unassignedCount} chưa xếp phòng</span>${historicalCount ? `<span>⚠ ${historicalCount} lịch ở phòng lịch sử/đã ẩn</span>` : ""}<span><i class="busy"></i>Đỏ đậm = đang giữ/bận</span></div>`;
   mount.innerHTML = summary + head + unassignedRow + unitRows;
+};
+
+const showCalendarWeekForCheckin = checkinAt => {
+  const checkin = window.UniteOps.asDate(checkinAt);
+  if (Number.isNaN(checkin.getTime())) return false;
+  const week = window.UniteOps.startOfWeek(checkin);
+  cskhState.weekStart = week;
+  const weekInput = $("#weekStart");
+  if (weekInput) weekInput.value = window.UniteOps.isoDate(week);
+  if ($("#bookingCalendar")) renderCalendar();
+  return true;
 };
 
 const bindBookingButtons = () => {
@@ -956,6 +967,7 @@ const openQuickPayModal = (bookingId) => {
   const storedBooking = cskhState.bookings.find(row => row.id === bookingId);
   if (!storedBooking) return;
   const booking = { ...storedBooking };
+  showCalendarWeekForCheckin(booking.checkinAt);
 
   if (!booking.total) {
     const room = cskhState.rooms.find(r => r.id === booking.roomId);
@@ -1348,7 +1360,8 @@ const openQuickPayModal = (bookingId) => {
       }
       
       const updated = { ...fresh, checkinAt:inAt, checkoutAt:outAt, stayDate:inAt.slice(0,10), checkoutDate:outAt.slice(0,10) };
-      await saveBooking(updated, { expectedUpdatedAt:fresh.updatedAt });
+      const saved = await saveBooking(updated, { expectedUpdatedAt:fresh.updatedAt });
+      showCalendarWeekForCheckin(saved.checkinAt);
       document.getElementById('quickPayModal')?.remove();
       document.getElementById('quickPayBackdrop')?.remove();
       alert('Đổi ngày thành công!');
@@ -1632,6 +1645,7 @@ window.openCreateBookingModal = (bookingId = null) => {
 
   const booking = bookingId ? cskhState.bookings.find(b => b.id === bookingId) : null;
   const isEdit = !!booking;
+  if (booking?.checkinAt) showCalendarWeekForCheckin(booking.checkinAt);
 
   const sourceOpts = window.UniteOps.sources?.map(s => `<option value="${s}" ${booking?.source === s ? 'selected' : ''}>${s}</option>`).join('') || '';
   const packages = ['3 tiếng', '4 tiếng', 'Qua đêm', 'Ngày'];
@@ -1764,6 +1778,20 @@ window.openCreateBookingModal = (bookingId = null) => {
   const saveBtn = document.getElementById('cbSaveBtn');
 
   const updateTimeHint = () => {
+    if (checkinInput.dataset.quickPasteTimeMissing === 'true') {
+      const parsedDate = checkinInput.dataset.quickPasteDate || '';
+      const dateLabel = parsedDate
+        ? new Date(`${parsedDate}T00:00:00`).toLocaleDateString('vi-VN')
+        : 'đã nhận';
+      const message = `Tin nhắn chỉ có ngày ${dateLabel}, chưa có giờ nhận. Vui lòng chọn lại đầy đủ ngày và giờ check-in.`;
+      checkinInput.setCustomValidity(message);
+      checkoutInput.setCustomValidity('');
+      checkoutInput.min = '';
+      timeHint.textContent = message;
+      timeHint.style.color = '#b42318';
+      return false;
+    }
+    checkinInput.setCustomValidity('');
     const start = window.UniteOps.asDate(checkinInput.value);
     const end = window.UniteOps.asDate(checkoutInput.value);
     const valid = checkinInput.value && checkoutInput.value && end > start;
@@ -1875,7 +1903,12 @@ window.openCreateBookingModal = (bookingId = null) => {
     updateUnits();
   };
 
-  checkinInput.addEventListener('change', () => updateCheckout({ preserveDuration: true }));
+  checkinInput.addEventListener('change', () => {
+    delete checkinInput.dataset.quickPasteTimeMissing;
+    delete checkinInput.dataset.quickPasteDate;
+    checkinInput.setCustomValidity('');
+    updateCheckout({ preserveDuration: true });
+  });
   packageSel.addEventListener('change', () => updateCheckout());
   checkoutInput.addEventListener('change', () => { updateTimeHint(); updateUnits(); });
   updateTimeHint();
@@ -1928,6 +1961,7 @@ window.openCreateBookingModal = (bookingId = null) => {
         payload,
         isEdit ? { expectedUpdatedAt:booking.updatedAt } : {}
       );
+      showCalendarWeekForCheckin(saved.checkinAt);
       document.getElementById('createBookingModal')?.remove();
       document.getElementById('createBookingBackdrop')?.remove();
       if (!isEdit) setTimeout(() => window.openQuickPayModal(saved.id), 200);
@@ -2276,6 +2310,19 @@ const sourceFromImport = value => {
   return matchingLabel || window.UniteOps.sourceLabelByCode?.[text] || text;
 };
 
+const sanitizeImportedProofPath = (value, bookingId) => {
+  const path = String(value || "").trim();
+  const expectedBookingId = String(bookingId || "").trim();
+  if (!path || !expectedBookingId || path.length > 1024) return "";
+  if (/[:?#\\]/.test(path) || path.startsWith("/")) return "";
+  const parts = path.split("/");
+  if (parts.length !== 3 || parts[0] !== "booking-bills" || parts[1] !== expectedBookingId) return "";
+  if (parts.some(part => !part || part === "." || part === ".." || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(part))) return "";
+  const extension = parts[2].split(".").pop()?.toLowerCase() || "";
+  if (!["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "pdf"].includes(extension)) return "";
+  return path;
+};
+
 const normalizeImportedBooking = (row, index) => {
   const normalizedRow = Object.fromEntries(Object.entries(row).map(([key, value]) => [normalizeKey(key), value]));
   const get = (...keys) => {
@@ -2308,10 +2355,10 @@ const normalizeImportedBooking = (row, index) => {
   const deposit = parseMoney(get("deposit", "deposit_amount", "tien coc", "da coc"));
   const paid = Math.max(parseMoney(get("paid", "paid_amount", "da thanh toan", "da thu", "da thu tong")), deposit);
   const importedStatus = statusFromImport(get("status", "trang thai"));
-  const depositBillUrl = existing?.depositBillUrl || String(get("depositBillUrl", "deposit_bill_url") || "");
-  const fullPaymentBillUrl = existing?.fullPaymentBillUrl || String(get("fullPaymentBillUrl", "full_payment_bill_url") || "");
-  const depositBillPath = existing?.depositBillPath || String(get("depositBillPath", "deposit_bill_path") || "");
-  const fullPaymentBillPath = existing?.fullPaymentBillPath || String(get("fullPaymentBillPath", "full_payment_bill_path") || "");
+  const depositBillPath = sanitizeImportedProofPath(existing?.depositBillPath, id)
+    || sanitizeImportedProofPath(get("depositBillPath", "deposit_bill_path"), id);
+  const fullPaymentBillPath = sanitizeImportedProofPath(existing?.fullPaymentBillPath, id)
+    || sanitizeImportedProofPath(get("fullPaymentBillPath", "full_payment_bill_path"), id);
 
   if (!customerName) throw new Error("thiếu tên khách");
   if (!phone) throw new Error("thiếu số Zalo/WhatsApp");
@@ -2321,12 +2368,12 @@ const normalizeImportedBooking = (row, index) => {
   if (window.UniteOps.unitRequiredStatuses?.includes(importedStatus) && !unit?.code) {
     throw new Error("booking đã check-in/check-out phải có phòng cụ thể");
   }
-  if (importedStatus === "deposited" && (deposit <= 0 || !(depositBillPath || depositBillUrl))) {
-    throw new Error("booking Đã cọc phải có số tiền và chứng từ cọc");
+  if (importedStatus === "deposited" && (deposit <= 0 || !depositBillPath)) {
+    throw new Error("booking Đã cọc phải có số tiền và storage path chứng từ cọc hợp lệ");
   }
   if (statusRank(importedStatus) >= statusRank("paid")
-      && (total <= 0 || paid < total || !(fullPaymentBillPath || fullPaymentBillUrl))) {
-    throw new Error("booking đã thanh toán/check-in/check-out phải có đủ tiền và chứng từ thanh toán");
+      && (total <= 0 || paid < total || !fullPaymentBillPath)) {
+    throw new Error("booking đã thanh toán/check-in/check-out phải có đủ tiền và storage path chứng từ thanh toán hợp lệ");
   }
   if (!checkinAt || !checkoutAt) throw new Error("sai định dạng check-in/check-out");
   if (new Date(checkoutAt).getTime() <= new Date(checkinAt).getTime()) throw new Error("check-out không sau check-in");
@@ -2359,8 +2406,8 @@ const normalizeImportedBooking = (row, index) => {
     assignedTo: String(get("assignedTo", "assigned_to", "cskh phu trach", "nguoi phu trach") || currentProfileName()).trim(),
     note: String(get("note", "internal_note", "ghi chu") || "").trim(),
     externalRef: String(get("externalRef", "external_ref", "ma ngoai", "ma ota") || "").trim(),
-    depositBillUrl,
-    fullPaymentBillUrl,
+    depositBillUrl: "",
+    fullPaymentBillUrl: "",
     depositBillPath,
     fullPaymentBillPath
   };
@@ -2420,40 +2467,79 @@ const renderAll = () => {
   renderCalendar();
 };
 
-const quickPasteDateTime = (raw = "", fallbackTime = "14:00") => {
+const quickPasteDateTime = (raw = "") => {
   const value = String(raw)
     .replace(/[\u00a0,]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   const pad = number => String(number).padStart(2, "0");
+  const empty = { date:"", value:"", hasTime:false };
+  const build = (year, month, day, hour = "", minute = "") => {
+    const date = `${String(year).padStart(4, "0")}-${pad(month)}-${pad(day)}`;
+    const calendarDate = new Date(`${date}T00:00:00`);
+    if (Number.isNaN(calendarDate.getTime())
+        || calendarDate.getFullYear() !== Number(year)
+        || calendarDate.getMonth() + 1 !== Number(month)
+        || calendarDate.getDate() !== Number(day)) return empty;
+    const hasTime = hour !== "" && minute !== "";
+    if (!hasTime) return { date, value:"", hasTime:false };
+    if (Number(hour) > 23 || Number(minute) > 59) return empty;
+    return { date, value:`${date}T${pad(hour)}:${pad(minute)}`, hasTime:true };
+  };
   let match = value.match(/\b(\d{1,2}):(\d{2})\s+(?:ngày\s+)?(\d{1,2})[./-](\d{1,2})[./-](\d{4})\b/i);
-  if (match) return `${match[5]}-${pad(match[4])}-${pad(match[3])}T${pad(match[1])}:${match[2]}`;
+  if (match) return build(match[5], match[4], match[3], match[1], match[2]);
 
   match = value.match(/\b(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:\s+(?:lúc\s+)?(\d{1,2}):(\d{2}))?\b/i);
-  if (match) {
-    const time = match[4] && match[5] ? `${pad(match[4])}:${match[5]}` : fallbackTime;
-    return `${match[3]}-${pad(match[2])}-${pad(match[1])}T${time}`;
-  }
+  if (match) return build(match[3], match[2], match[1], match[4] || "", match[5] || "");
 
   match = value.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2}))?\b/i);
-  if (match) {
-    const time = match[4] && match[5] ? `${pad(match[4])}:${match[5]}` : fallbackTime;
-    return `${match[1]}-${pad(match[2])}-${pad(match[3])}T${time}`;
-  }
-  return "";
+  if (match) return build(match[1], match[2], match[3], match[4] || "", match[5] || "");
+  return empty;
 };
 
 const quickPasteSchedule = (raw = "") => {
   const parts = String(raw).split(/\s*(?:→|->|–|—|đến)\s*/i);
+  const checkin = quickPasteDateTime(parts[0]);
+  const checkout = parts.length > 1 ? quickPasteDateTime(parts[1]) : { date:"", value:"", hasTime:false };
   return {
-    checkinAt: quickPasteDateTime(parts[0]),
-    checkoutAt: parts.length > 1 ? quickPasteDateTime(parts[1]) : ""
+    checkinAt: checkin.value,
+    checkoutAt: checkout.value,
+    checkinDate: checkin.date,
+    checkoutDate: checkout.date,
+    hasCheckinTime: checkin.hasTime,
+    hasCheckoutTime: checkout.hasTime
   };
+};
+
+const quickPastePackageLabel = (raw = "") => {
+  const value = String(raw)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d");
+  const hours = value.match(/\b(3|4|8)\s*(?:tieng|gio)\b/);
+  if (hours?.[1] === "4") return "4 tiếng";
+  if (hours?.[1] === "8") return "Qua đêm";
+  if (hours?.[1] === "3") return "3 tiếng";
+  if (/\bqua\s*dem\b/.test(value)) return "Qua đêm";
+  if (/^\s*(?:theo\s+)?ngay\s*$/.test(value)) return "Ngày";
+  return "";
+};
+
+const requestedStatusFilter = () => {
+  try {
+    const status = new URLSearchParams(window.location.search).get("status") || "";
+    return (status === "all" || window.UniteOps.statuses[status]) ? status : "";
+  } catch {
+    return "";
+  }
 };
 
 const bind = async () => {
   const week = window.UniteOps.startOfWeek(new Date());
   cskhState.weekStart = week;
+  const statusFromQuery = requestedStatusFilter();
+  if (statusFromQuery) cskhState.status = statusFromQuery;
   $("#weekStart").value = window.UniteOps.isoDate(week);
   $("#cskhAuthState").textContent = `Đã đăng nhập: ${currentProfileName()} · quyền ${window.UniteAuth?.profile?.()?.role || ""}`;
 
@@ -2495,14 +2581,15 @@ const bind = async () => {
     const scheduleMatch = text.match(/-\s*Lịch(?:\s+mong muốn)?\s*:\s*(.+)/i)
       || text.match(/\bLịch mong muốn:\s*(.+)/i);
     const dateMatch = text.match(/- Ngày nhận:\s*(.+)/i);
-    const packageMatch = text.match(/- Gói:\s*(.+)/i)
-      || text.match(/\bgói\s+([^,.\r\n]+)/i);
+    const packageMatch = text.match(/-\s*(?:Gói|Thời lượng)\s*:\s*(.+)/i)
+      || text.match(/\b(?:gói|thời lượng)\s*:?\s*([^,.\r\n]+)/i);
     const guestsMatch = text.match(/- Khách:\s*([^\r\n]+)/i)
       || text.match(/(\d+\s*người lớn(?:\s*,\s*\d+\s*trẻ em)?)/i)
       || text.match(/\b(\d+)\s*khách\b/i);
     const guestTotal = guestsMatch
       ? [...guestsMatch[1].matchAll(/\d+/g)].reduce((sum, match) => sum + Number(match[0]), 0)
       : 0;
+    const detectedPackage = quickPastePackageLabel(packageMatch?.[1] || scheduleMatch?.[1] || text);
 
     window.openCreateBookingModal();
     const form = $("#createBookingForm");
@@ -2511,6 +2598,7 @@ const bind = async () => {
       return;
     }
     let changed = false;
+    let missingCheckinTimeDate = "";
 
     if (branchMatch && branchMatch[1]) {
       const b = branchMatch[1].trim();
@@ -2536,12 +2624,12 @@ const bind = async () => {
       }
     }
 
-    if (packageMatch && packageMatch[1]) {
-      const p = packageMatch[1].trim();
-      const option = Array.from(form.package.options).find(o =>
-        normalizeKey(o.value).includes(normalizeKey(p)) || normalizeKey(p).includes(normalizeKey(o.value))
-      );
-      if (option) { form.package.value = option.value; changed = true; }
+    if (detectedPackage) {
+      const option = Array.from(form.package.options).find(o => o.value === detectedPackage);
+      if (option) {
+        form.package.value = option.value;
+        changed = true;
+      }
     }
 
     if (scheduleMatch && scheduleMatch[1] && form.checkin) {
@@ -2551,12 +2639,26 @@ const bind = async () => {
         form.checkout.value = parsed.checkoutAt
           || window.UniteOps.addHoursLocal(parsed.checkinAt, window.UniteOps.packageHours(form.package.value));
         changed = true;
+      } else if (parsed.checkinDate) {
+        form.checkin.value = "";
+        form.checkout.value = "";
+        form.checkin.dataset.quickPasteTimeMissing = "true";
+        form.checkin.dataset.quickPasteDate = parsed.checkinDate;
+        missingCheckinTimeDate = parsed.checkinDate;
+        changed = true;
       }
     } else if (dateMatch && dateMatch[1]) {
       const parsed = quickPasteDateTime(dateMatch[1]);
-      if (parsed && form.checkin) {
-        form.checkin.value = parsed;
-        form.checkout.value = window.UniteOps.addHoursLocal(parsed, window.UniteOps.packageHours(form.package.value));
+      if (parsed.value && form.checkin) {
+        form.checkin.value = parsed.value;
+        form.checkout.value = window.UniteOps.addHoursLocal(parsed.value, window.UniteOps.packageHours(form.package.value));
+        changed = true;
+      } else if (parsed.date && form.checkin) {
+        form.checkin.value = "";
+        form.checkout.value = "";
+        form.checkin.dataset.quickPasteTimeMissing = "true";
+        form.checkin.dataset.quickPasteDate = parsed.date;
+        missingCheckinTimeDate = parsed.date;
         changed = true;
       }
     }
@@ -2566,13 +2668,17 @@ const bind = async () => {
       changed = true;
     }
     form.checkout?.dispatchEvent(new Event("change", { bubbles: true }));
-    form.name?.focus();
 
     if (changed) {
-      alert("Đã điền tự động các thông tin tìm thấy. Vui lòng kiểm tra lại và điền thêm Tên khách, số Zalo/WhatsApp.");
+      const warning = missingCheckinTimeDate
+        ? `\n\n⚠ Tin nhắn chỉ có ngày ${new Date(`${missingCheckinTimeDate}T00:00:00`).toLocaleDateString("vi-VN")}, chưa có giờ nhận. Hệ thống không tự điền giờ; vui lòng chọn đầy đủ ngày và giờ check-in.`
+        : "";
+      alert(`Đã điền tự động các thông tin tìm thấy. Vui lòng kiểm tra lại và điền thêm Tên khách, số Zalo/WhatsApp.${warning}`);
     } else {
       alert("Không tìm thấy thông tin phù hợp theo mẫu tin nhắn hệ thống.");
     }
+    if (missingCheckinTimeDate) form.checkin?.focus();
+    else form.name?.focus();
   });
 
   let lastKnownBookingId = null;

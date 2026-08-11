@@ -3883,12 +3883,12 @@ const loadPublicRoomsFromSupabase = async () => {
   try {
     const select = [
       "id","code","name","category","price_tier","vibe","short_line","description","inventory_count","status","is_published","sort_order",
-      "branches(name,area,public_address)",
+      "branches!inner(name,area,public_address)",
       "room_prices(package_code,package_label,duration_hours,base_price,sale_price,sort_order,is_active)",
       "room_images(storage_path,public_url,sort_order,is_cover,is_active)",
       "promotions(title,discount_percent,discount_amount,badge_label,show_badge,starts_at,ends_at,is_active,created_at)"
     ].join(",");
-    const query = new URLSearchParams({ select, is_published: "eq.true", order: "sort_order.asc" });
+    const query = new URLSearchParams({ select, is_published: "eq.true", "branches.is_active": "eq.true", order: "sort_order.asc" });
     const requestHeaders = { apikey: key, Authorization: `Bearer ${key}` };
     const [response, globalPromoResponse] = await Promise.all([
       fetch(`${baseUrl}/rest/v1/room_types?${query.toString()}`, { headers: requestHeaders }),
@@ -3897,7 +3897,12 @@ const loadPublicRoomsFromSupabase = async () => {
     if (!response.ok) return false;
     const rows = await response.json();
     const globalPromotions = globalPromoResponse.ok ? await globalPromoResponse.json() : [];
-    if (!Array.isArray(rows) || !rows.length) return false;
+    if (!Array.isArray(rows)) return false;
+    if (!rows.length) {
+      rooms = [];
+      window.rooms = rooms;
+      return true;
+    }
     const imageUrl = (img) => img.public_url || (img.storage_path ? `${baseUrl}/storage/v1/object/public/${config.roomImageBucket || "room-images"}/${img.storage_path}` : "");
     const isCurrentPromotion = (promo) => {
       if (!promo || promo.is_active === false) return false;

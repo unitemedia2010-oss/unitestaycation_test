@@ -1,4 +1,4 @@
-# UNITE STAYCATION V15.4.2 — HẠNH BẮT ĐẦU TỪ ĐÂY
+# UNITE STAYCATION V15.5 — HẠNH BẮT ĐẦU TỪ ĐÂY
 
 Đây là bản đã kiểm tra và gia cố từ project Hạnh gửi. Giao diện public được giữ nguyên hướng thiết kế; phần được chỉnh chủ yếu là dữ liệu live, phân quyền, bảo mật bill, Admin, CSKH và Dashboard.
 
@@ -23,6 +23,7 @@ supabase/migration_v15_3_payment_proofs.sql
 supabase/migration_v15_4_booking_flow.sql
 supabase/migration_v15_4_1_unassigned_payments.sql
 supabase/migration_v15_4_2_auto_room_assignment.sql
+supabase/migration_v15_5_safe_branch_archive.sql
 ```
 
 ### Trường hợp B — project cũ đã từng chạy schema V11/V12
@@ -35,9 +36,10 @@ supabase/migration_v15_3_payment_proofs.sql
 supabase/migration_v15_4_booking_flow.sql
 supabase/migration_v15_4_1_unassigned_payments.sql
 supabase/migration_v15_4_2_auto_room_assignment.sql
+supabase/migration_v15_5_safe_branch_archive.sql
 ```
 
-Chuỗi migration này bổ sung đường dẫn bill riêng tư, chuyển bucket bill sang private, thêm quyền xóa file, khóa RPC kiểm tra trùng lịch và áp dụng luồng đến V15.4.2. Migration V15.4.2 phải chạy sau V15.4.1 để QuickPay tự xếp phòng nguyên tử trước khi lưu bill.
+Chuỗi migration này bổ sung đường dẫn bill riêng tư, chuyển bucket bill sang private, thêm quyền xóa file, khóa RPC kiểm tra trùng lịch và áp dụng luồng đến V15.5. Migration V15.5 phải chạy sau V15.4.2; bản này cho phép ẩn/mở lại chi nhánh mà không xóa lịch sử booking và chặn khách thấy layout thuộc chi nhánh đã ẩn.
 
 ## 3. Tạo project Supabase mới
 
@@ -145,13 +147,15 @@ Không nên double-click trực tiếp file HTML vì một số trình duyệt s
 - CSKH: `cskh.html`
 - Dashboard: `dashboard.html`
 
-Bản V15.4.2 dùng cache revision `v15.4.6` cho các JavaScript đã thay đổi. Sau khi upload, kiểm tra URL asset có query này rồi nhấn `Ctrl+F5`.
+Bản V15.5 dùng cache revision `v15.4.7` cho `js/app.js` và `v15.4.9` cho `js/admin-live.js`. Sau khi upload, kiểm tra URL asset có query mới rồi nhấn `Ctrl+F5`.
 
 ## 7. Thứ tự nhập dữ liệu trong Admin
 
 Đăng nhập `admin.html` bằng tài khoản Super Admin, sau đó làm đúng thứ tự:
 
 1. **Chi nhánh**: thêm/sửa tên, slug, khu vực và địa chỉ public.
+   - Dùng **Ẩn khỏi web** để ngừng bán nhưng vẫn giữ lịch, cọc, thanh toán và bill cũ.
+   - Chỉ Super Admin mới thấy **Xóa chi nhánh trống**, và chỉ xóa được khi không còn layout, phòng hoặc booking tham chiếu.
 2. **Layout/phòng**: chọn chi nhánh, nhập mã layout, tên layout và số lượng phòng thật.
 3. **Giá & KM**:
    - Chọn layout + gói để cập nhật giá hiện có.
@@ -285,10 +289,12 @@ Bill thanh toán nằm trong bucket private. Tài khoản vận hành hợp lệ
 14. Kiểm tra ảnh thật đã upload đủ cho 7 layout.
 15. Kiểm tra Google Sheet thực sự xuất hiện dòng mới.
 16. Backup database trước khi thay schema hoặc xóa dữ liệu.
+17. Ẩn một chi nhánh test; xác nhận public không còn layout của chi nhánh đó, còn Admin/CSKH vẫn xem được booking lịch sử; sau đó mở lại.
 
 ## 13. Các giới hạn còn lại
 
 - ZIP hiện không có ảnh phòng thật; cần upload qua Admin hoặc tool hàng loạt.
 - Contact channels, một số nội dung giới thiệu và bản dịch vẫn là nội dung frontend/local, chưa có bảng CMS live riêng.
 - Website public hiện là luồng xem phòng và liên hệ; chưa phải cổng thanh toán trực tuyến.
+- Chưa gửi thông báo Zalo tự động. Muốn bật cần Zalo Official Account + OpenAPI và một Supabase Edge Function giữ token ở server; không đặt token Zalo trong JavaScript frontend.
 - Chưa thể xác nhận end-to-end với dữ liệu thật cho đến khi Hạnh dán Supabase URL/key và triển khai Apps Script.

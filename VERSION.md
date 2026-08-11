@@ -1,4 +1,12 @@
-# Unite Staycation V15.4.2
+# Unite Staycation V15.5
+
+## Quản lý chi nhánh an toàn
+
+- Thay thao tác xóa trực tiếp bằng `Ẩn khỏi web` / `Mở lại`; booking, payment và bill lịch sử không bị xóa.
+- Giao diện hiển thị số layout/phòng và kiểm tra booking trước khi xác nhận.
+- Chỉ Super Admin được xóa một chi nhánh hoàn toàn trống; phải nhập đúng slug để xác nhận.
+- Public chỉ tải layout khi cả layout được publish và chi nhánh cha đang hoạt động.
+- Migration bắt buộc cho project đang vận hành: `supabase/migration_v15_5_safe_branch_archive.sql`.
 
 > SQL hotfix: điều kiện kiểm tra QuickPay claim trong V15.4.2 đã bỏ biểu thức `CASE ... END THEN` gây lỗi `42601` trên Supabase. Nếu lần chạy trước dừng ở dòng 109, dùng lại file migration hiện tại và chạy toàn bộ từ đầu.
 
