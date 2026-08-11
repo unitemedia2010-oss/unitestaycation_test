@@ -153,7 +153,7 @@ Tạo bốn user test và gán role tương ứng.
 - [ ] Upload ảnh từ thư viện điện thoại được.
 - [ ] CSKH thao tác form không bị tràn ngang.
 - [ ] Không có lỗi đỏ nghiêm trọng trong Console trình duyệt desktop.
-- [ ] `app.js`, `ops-data.js` và `cskh.js` thay đổi trong bản vá được tải với query cache `v=v15.4.6`.
+- [ ] `app.js` được tải với query cache `v=v15.4.7`; `admin-live.js` dùng `v=v15.4.9`.
 
 ## K. Tin nhắn liên hệ và Quick Paste
 
@@ -163,3 +163,14 @@ Tạo bốn user test và gán role tương ứng.
 - [ ] Mẫu liên hệ cũ dùng `{{date}}` được chuẩn hóa sang `{{schedule}}` và vẫn đúng sau khi reload.
 - [ ] Khi chưa chọn giờ, tin nhắn ghi rõ `chưa chọn giờ`, không âm thầm dùng 14:00.
 - [ ] Copy tin nhắn hệ thống sang Quick Paste; CSKH điền đúng cả check-in và check-out, không tự rơi về 14:00.
+
+## L. Ẩn/mở lại chi nhánh
+
+- [ ] Đã chạy `supabase/migration_v15_5_safe_branch_archive.sql` trên đúng project.
+- [ ] Nút chi nhánh là `Ẩn khỏi web`, không còn xóa thẳng một chi nhánh đang có dữ liệu.
+- [ ] Hộp xác nhận hiển thị số layout, phòng và booking sẽ được giữ.
+- [ ] Ẩn chi nhánh không làm thay đổi booking, payment, bill hoặc phòng cụ thể đã xếp.
+- [ ] Website public không còn hiển thị layout thuộc chi nhánh đã ẩn.
+- [ ] Admin/CSKH vẫn xem và xử lý được booking lịch sử của chi nhánh đã ẩn.
+- [ ] Mở lại chi nhánh làm các layout đang publish xuất hiện lại trên public.
+- [ ] Admin thường không xóa được chi nhánh; Super Admin chỉ xóa được chi nhánh hoàn toàn trống và phải nhập đúng slug.

@@ -732,26 +732,150 @@ const opsCreateSignedUrlAsync = async (bucket, path, expiresIn = 900) => {
   return /^https?:/i.test(signed) ? signed : `${opsBaseUrl()}/storage/v1${signed.startsWith("/") ? signed : `/${signed}`}`;
 };
 
+const opsValidatePaymentBillBucket = bucket => {
+  const expectedBucket = String(opsConfig().paymentBillBucket || "payment-bills").trim();
+  if (!expectedBucket || String(bucket || "").trim() !== expectedBucket) {
+    throw new Error(`Chỉ được mở bill từ bucket ${expectedBucket || "payment-bills"}.`);
+  }
+  return expectedBucket;
+};
+
+const opsValidatePaymentBillPath = (path, bucket) => {
+  opsValidatePaymentBillBucket(bucket);
+  const rawPath = String(path || "").trim();
+  if (!rawPath || rawPath.length > 2048 || rawPath.startsWith("/") || rawPath.endsWith("/") || rawPath.includes("\\") || /[?#\u0000-\u001f\u007f]/.test(rawPath)) {
+    throw new Error("Đường dẫn bill không hợp lệ. Vui lòng tải lại bill từ Supabase.");
+  }
+  const safeSegments = rawPath.split("/").every(segment => {
+    if (!segment) return false;
+    let decoded = segment;
+    try {
+      for (let index = 0; index < 2; index += 1) {
+        const next = decodeURIComponent(decoded);
+        if (next === decoded) break;
+        decoded = next;
+      }
+    } catch {
+      return false;
+    }
+    return decoded !== "." && decoded !== ".." && !decoded.includes("/") && !decoded.includes("\\") && !/[\u0000-\u001f\u007f]/.test(decoded);
+  });
+  if (!safeSegments) throw new Error("Đường dẫn bill không hợp lệ. Vui lòng tải lại bill từ Supabase.");
+  return rawPath;
+};
+
+const opsValidatePaymentBillUrl = (target, bucket) => {
+  const rawTarget = String(target || "").trim();
+  const expectedBucket = opsValidatePaymentBillBucket(bucket);
+  if (!rawTarget) throw new Error("URL bill trống hoặc không hợp lệ.");
+
+  let projectUrl;
+  let billUrl;
+  try {
+    projectUrl = new URL(opsBaseUrl());
+    billUrl = new URL(rawTarget);
+  } catch {
+    throw new Error("URL bill không hợp lệ. Vui lòng tải lại bill từ Supabase.");
+  }
+
+  if (projectUrl.protocol !== "https:" || billUrl.protocol !== "https:" || billUrl.origin !== projectUrl.origin || billUrl.username || billUrl.password) {
+    throw new Error("URL bill bị từ chối vì không thuộc đúng Supabase project.");
+  }
+
+  const segments = billUrl.pathname.split("/").filter(Boolean);
+  const allowedAccessModes = new Set(["sign", "authenticated", "public"]);
+  const hasExpectedStoragePath = segments.length > 5
+    && segments[0] === "storage"
+    && segments[1] === "v1"
+    && segments[2] === "object"
+    && allowedAccessModes.has(segments[3])
+    && segments[4] === encodeURIComponent(expectedBucket);
+  if (!hasExpectedStoragePath) {
+    throw new Error(`URL bill bị từ chối vì không thuộc bucket ${expectedBucket}.`);
+  }
+  if (segments[3] === "sign" && !billUrl.searchParams.get("token")) {
+    throw new Error("URL bill đã ký không có token hợp lệ. Vui lòng mở lại bill.");
+  }
+
+  return billUrl.href;
+};
+
 const opsOpenStoredFileAsync = async (bucket, path, fallbackUrl = "") => {
-  const target = path ? await opsCreateSignedUrlAsync(bucket, path, 900) : fallbackUrl;
+  const safePath = path ? opsValidatePaymentBillPath(path, bucket) : "";
+  const target = safePath ? await opsCreateSignedUrlAsync(bucket, safePath, 900) : fallbackUrl;
   if (!target) throw new Error("Booking chưa có file bill.");
-  
+  const safeTarget = opsValidatePaymentBillUrl(target, bucket);
+
   const id = 'uniteFileViewer';
   document.getElementById(id)?.remove();
-  const html = `
-    <div id="${id}" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;backdrop-filter:blur(5px);">
-      <div style="position:absolute;top:20px;right:20px;display:flex;gap:15px;z-index:100000;">
-         <a href="${target}" target="_blank" style="color:#fff;text-decoration:none;font-weight:bold;font-size:14px;background:rgba(255,255,255,0.2);padding:8px 16px;border-radius:8px;">Mở tab mới</a>
-         <button onclick="document.getElementById('${id}').remove()" style="background:#e53935;border:none;color:#fff;font-size:14px;font-weight:bold;padding:8px 16px;border-radius:8px;cursor:pointer;">Đóng X</button>
-      </div>
-      <div style="width:90%;height:85%;display:flex;align-items:center;justify-content:center;overflow:auto;">
-         <img src="${target}" style="max-width:100%;max-height:100%;object-fit:contain;transition:transform 0.2s;cursor:zoom-in;" onclick="this.style.transform = this.style.transform === 'scale(2)' ? 'scale(1)' : 'scale(2)'; this.style.cursor = this.style.transform === 'scale(2)' ? 'zoom-out' : 'zoom-in';" onerror="this.outerHTML='<iframe src=\\'${target}\\' style=\\'width:100%;height:100%;border:none;background:#fff;border-radius:8px;\\'></iframe>'" />
-      </div>
-      <p style="color:#ccc;font-size:13px;margin-top:10px;">Bấm vào ảnh để Phóng to/Thu nhỏ</p>
-    </div>
-  `;
-  document.body.insertAdjacentHTML('beforeend', html);
-  return target;
+
+  const setStyles = (element, styles) => Object.assign(element.style, styles);
+  const viewer = document.createElement("div");
+  viewer.id = id;
+  setStyles(viewer, {
+    position:"fixed", inset:"0", background:"rgba(0,0,0,0.85)", zIndex:"99999",
+    display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+    backdropFilter:"blur(5px)"
+  });
+
+  const actions = document.createElement("div");
+  setStyles(actions, { position:"absolute", top:"20px", right:"20px", display:"flex", gap:"15px", zIndex:"100000" });
+
+  const openLink = document.createElement("a");
+  openLink.href = safeTarget;
+  openLink.target = "_blank";
+  openLink.rel = "noopener noreferrer";
+  openLink.referrerPolicy = "no-referrer";
+  openLink.textContent = "Mở tab mới";
+  setStyles(openLink, { color:"#fff", textDecoration:"none", fontWeight:"bold", fontSize:"14px", background:"rgba(255,255,255,0.2)", padding:"8px 16px", borderRadius:"8px" });
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.textContent = "Đóng X";
+  setStyles(closeButton, { background:"#e53935", border:"none", color:"#fff", fontSize:"14px", fontWeight:"bold", padding:"8px 16px", borderRadius:"8px", cursor:"pointer" });
+
+  const closeViewer = () => {
+    document.removeEventListener("keydown", closeOnEscape);
+    viewer.remove();
+  };
+  const closeOnEscape = event => {
+    if (event.key === "Escape") closeViewer();
+  };
+  closeButton.addEventListener("click", closeViewer);
+  document.addEventListener("keydown", closeOnEscape);
+  actions.append(openLink, closeButton);
+
+  const content = document.createElement("div");
+  setStyles(content, { width:"90%", height:"85%", display:"flex", alignItems:"center", justifyContent:"center", overflow:"auto" });
+
+  const image = document.createElement("img");
+  image.alt = "Bill thanh toán";
+  image.referrerPolicy = "no-referrer";
+  image.src = safeTarget;
+  setStyles(image, { maxWidth:"100%", maxHeight:"100%", objectFit:"contain", transition:"transform 0.2s", cursor:"zoom-in" });
+  image.addEventListener("click", () => {
+    const zoomed = image.style.transform === "scale(2)";
+    image.style.transform = zoomed ? "scale(1)" : "scale(2)";
+    image.style.cursor = zoomed ? "zoom-in" : "zoom-out";
+  });
+  image.addEventListener("error", () => {
+    const frame = document.createElement("iframe");
+    frame.src = safeTarget;
+    frame.title = "Xem bill thanh toán";
+    frame.referrerPolicy = "no-referrer";
+    frame.setAttribute("sandbox", "");
+    setStyles(frame, { width:"100%", height:"100%", border:"none", background:"#fff", borderRadius:"8px" });
+    image.replaceWith(frame);
+  }, { once:true });
+  content.appendChild(image);
+
+  const hint = document.createElement("p");
+  hint.textContent = "Bấm vào ảnh để Phóng to/Thu nhỏ";
+  setStyles(hint, { color:"#ccc", fontSize:"13px", marginTop:"10px" });
+
+  viewer.append(actions, content, hint);
+  document.body.appendChild(viewer);
+  return safeTarget;
 };
 
 const opsDeleteFileAsync = async (bucket, path, accessToken = "") => {

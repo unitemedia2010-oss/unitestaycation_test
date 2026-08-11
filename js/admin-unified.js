@@ -1,15 +1,56 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const highlightCurrentNav = () => {
-    const page = document.body.dataset.page;
-    if (page) {
-      document.querySelectorAll('.top-nav a').forEach(a => {
-        if (a.getAttribute('href').includes(page)) {
-          a.classList.add('active');
-        }
-      });
+const highlightCurrentNav = () => {
+  const page = document.body.dataset.page;
+  if (!page) return;
+  document.querySelectorAll('.top-nav a').forEach(a => {
+    const target = (a.getAttribute('href') || '').split(/[?#]/)[0].split('/').pop();
+    const isCurrent = target === `${page}.html`;
+    a.classList.toggle('active', isCurrent);
+    if (isCurrent) a.setAttribute('aria-current', 'page');
+    else a.removeAttribute('aria-current');
+  });
+};
+
+const applyRoleNavigation = () => {
+  const role = window.UniteAuth?.profile?.()?.role;
+  const rolePages = {
+    accountant: new Set(['dashboard.html']),
+    cskh: new Set(['cskh.html'])
+  };
+  const allowedPages = rolePages[role];
+  if (allowedPages) {
+    document.querySelectorAll('.top-nav a').forEach(a => {
+      const target = (a.getAttribute('href') || '').split(/[?#]/)[0].split('/').pop();
+      if (['admin.html', 'dashboard.html', 'cskh.html'].includes(target) && !allowedPages.has(target)) a.remove();
+    });
+  }
+  highlightCurrentNav();
+};
+
+const mountResponsiveOpsNav = () => {
+  const nav = document.querySelector('.site-header .top-nav') || document.querySelector('body > .top-nav');
+  if (!nav || nav.dataset.responsiveMount === 'ready') return;
+  nav.dataset.responsiveMount = 'ready';
+  const home = document.createComment('ops-nav-home');
+  nav.parentNode?.insertBefore(home, nav);
+  const media = window.matchMedia('(max-width: 900px)');
+  const sync = () => {
+    if (media.matches) {
+      if (nav.parentNode !== document.body) document.body.appendChild(nav);
+    } else if (home.parentNode && nav.previousSibling !== home) {
+      home.parentNode.insertBefore(nav, home.nextSibling);
     }
   };
+  sync();
+  if (typeof media.addEventListener === 'function') media.addEventListener('change', sync);
+  else if (typeof media.addListener === 'function') media.addListener(sync);
+};
+
+window.addEventListener('unite:auth-ready', applyRoleNavigation);
+
+document.addEventListener("DOMContentLoaded", () => {
+  mountResponsiveOpsNav();
   highlightCurrentNav();
+  if (window.UniteAuth?.profile?.()) applyRoleNavigation();
 
   const bellBtn = document.getElementById("bellNotificationBtn");
   const bellBadge = document.getElementById("bellBadge");
@@ -53,8 +94,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (count > lastCount && lastCount !== -1) {
           playNotificationSound();
           if (Notification.permission === 'granted') {
-             new Notification("CÃ³ yÃªu cáº§u Ä‘áº·t phÃ²ng má»›i! ðŸŽ‰", {
-               body: `KhÃ¡ch: ${newBookings[0]?.customerName || 'Má»›i'}`
+             new Notification("Có yêu cầu đặt phòng mới! 🎉", {
+               body: `Khách: ${newBookings[0]?.customerName || 'Mới'}`
              });
           }
         }
@@ -69,13 +110,12 @@ document.addEventListener("DOMContentLoaded", () => {
   
   bellBtn.addEventListener('click', () => {
     if(document.body.dataset.page !== 'cskh') {
-      window.location.href = 'cskh.html';
+      window.location.href = 'cskh.html?status=new';
     } else {
       const statusFilter = document.getElementById('cskhStatusFilter');
       if (statusFilter) {
         statusFilter.value = 'new';
-        if (window.cskhState) window.cskhState.status = 'new';
-        if (window.renderBookings) window.renderBookings();
+        statusFilter.dispatchEvent(new Event('change', { bubbles:true }));
         document.getElementById('bookingList')?.scrollIntoView({ behavior: 'smooth' });
       }
     }
@@ -141,4 +181,3 @@ window.checkSupabaseHealth = async (btn) => {
     btn.disabled = false;
   }
 };
-

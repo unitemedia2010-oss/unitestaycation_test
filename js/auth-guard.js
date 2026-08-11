@@ -28,7 +28,11 @@
   const profile = () => readJson(PROFILE_KEY);
   const setSession = (value) => writeJson(AUTH_KEY, value);
   const setProfile = (value) => writeJson(PROFILE_KEY, value);
-  const clearLocalAuth = () => { setSession(null); setProfile(null); };
+  const clearLocalAuth = () => {
+    setSession(null);
+    setProfile(null);
+    try { localStorage.removeItem("unite-staycation-ops-bookings-v15"); } catch {}
+  };
 
   const tokenExpiredSoon = (value = session()) => {
     const expiresAt = Number(value?.expires_at || 0);
@@ -112,7 +116,7 @@
     }
   };
 
-  const logout = async () => {
+  const logout = async (redirectTo = "") => {
     const current = session();
     try {
       if (configured() && current?.access_token) {
@@ -120,7 +124,8 @@
       }
     } catch {}
     clearLocalAuth();
-    location.reload();
+    if (redirectTo) location.href = redirectTo;
+    else location.reload();
   };
 
   const hasRole = (roles = []) => {
@@ -132,6 +137,12 @@
   };
 
   const dispatchReady = () => window.dispatchEvent(new CustomEvent("unite:auth-ready", { detail: { session: session(), profile: profile() } }));
+
+  const setProtectedContentInert = locked => {
+    document.querySelectorAll("body > header, body > main, body > footer").forEach(element => {
+      element.inert = locked;
+    });
+  };
 
   const injectCss = () => {
     if (document.querySelector("#uniteAuthCss")) return;
@@ -167,7 +178,7 @@
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Đăng xuất";
-    button.addEventListener("click", logout);
+    button.addEventListener("click", () => logout());
     bar.append(label, button);
     document.body.appendChild(bar);
   };
@@ -175,27 +186,45 @@
   const showModal = (roles = [], initialError = "") => {
     injectCss();
     document.body.classList.add("auth-locked");
+    setProtectedContentInert(true);
     document.querySelector("#uniteAuthModal")?.remove();
     const el = document.createElement("div");
     el.id = "uniteAuthModal";
     el.className = "auth-modal-backdrop";
     el.innerHTML = `
-      <form class="auth-modal" id="uniteAuthForm">
+      <form class="auth-modal" id="uniteAuthForm" role="dialog" aria-modal="true" aria-labelledby="uniteAuthTitle">
         <span class="panel-kicker">Unite Staycation Ops</span>
-        <h2>Bắt buộc đăng nhập.</h2>
+        <h2 id="uniteAuthTitle">Bắt buộc đăng nhập.</h2>
         <p>Admin, CSKH và Dashboard chỉ mở sau khi đăng nhập đúng tài khoản Supabase. Quyền hiện cần: <b>${roles.length ? roles.join(" / ") : "tài khoản hợp lệ"}</b>.</p>
         <label>Email<input name="email" type="email" autocomplete="username" placeholder="Email tài khoản" required></label>
         <label>Mật khẩu<input name="password" type="password" autocomplete="current-password" placeholder="Mật khẩu" required></label>
         <div class="auth-error" id="uniteAuthError"></div>
         <div class="auth-actions">
           <button class="btn primary" type="submit">Đăng nhập</button>
-          <button type="button" style="background:transparent;border:1px solid rgba(122,0,0,0.2);border-radius:12px;padding:14px 20px;color:#7a0000;font-weight:700;cursor:pointer;font-size:14px;" onclick="window.UniteAuth.logout().finally(() => { window.location.href = 'index.html'; })">Đăng xuất & Về trang chủ</button>
+          <button id="uniteAuthExit" type="button" style="background:transparent;border:1px solid rgba(122,0,0,0.2);border-radius:12px;padding:14px 20px;color:#7a0000;font-weight:700;cursor:pointer;font-size:14px;">Đăng xuất & Về trang chủ</button>
         </div>
         <div style="margin-top:12px;"><span class="auth-role-pill">Super Admin • Admin • CSKH • Kế toán</span></div>
       </form>`;
     document.body.appendChild(el);
     const error = el.querySelector("#uniteAuthError");
     if (error) error.textContent = initialError;
+    el.querySelector("#uniteAuthExit")?.addEventListener("click", () => logout("index.html"));
+    const focusable = () => [...el.querySelectorAll('input, button, [href], [tabindex]:not([tabindex="-1"])')].filter(node => !node.disabled);
+    el.addEventListener("keydown", event => {
+      if (event.key !== "Tab") return;
+      const nodes = focusable();
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+    el.querySelector('input[name="email"]')?.focus();
     el.querySelector("form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
@@ -206,10 +235,10 @@
       try {
         await login(form.email.value.trim(), form.password.value);
         if (!hasRole(roles)) {
-          clearLocalAuth();
           throw new Error("Tài khoản này chưa có đúng quyền để vào trang.");
         }
         document.body.classList.remove("auth-locked");
+        setProtectedContentInert(false);
         el.remove();
         showTopbar();
         dispatchReady();
@@ -230,8 +259,12 @@
       await ensureSession();
       const prof = await fetchProfile();
       if (!prof) throw new Error("Tài khoản chưa được gán quyền hoặc đã bị khóa.");
-      if (!hasRole(roles)) throw new Error("Tài khoản này không có quyền truy cập trang hiện tại.");
+      if (!hasRole(roles)) {
+        showModal(roles, "Tài khoản này không có quyền truy cập trang hiện tại. Phiên đăng nhập vẫn được giữ; hãy mở đúng khu vực được cấp quyền.");
+        return;
+      }
       document.body.classList.remove("auth-locked");
+      setProtectedContentInert(false);
       showTopbar();
       dispatchReady();
     } catch (error) {

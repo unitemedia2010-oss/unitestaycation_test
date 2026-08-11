@@ -21,23 +21,52 @@ const loadLive = async () => {
   renderAll();
 };
 
-const startOfPeriod = () => {
+const periodBounds = () => {
+  if (dashboardState.fromDate || dashboardState.toDate) {
+    return {
+      start: dashboardState.fromDate
+        ? new Date(`${dashboardState.fromDate}T00:00:00`).getTime()
+        : Number.NEGATIVE_INFINITY,
+      end: dashboardState.toDate
+        ? new Date(`${dashboardState.toDate}T23:59:59.999`).getTime()
+        : Number.POSITIVE_INFINITY
+    };
+  }
+
   const now = new Date();
-  if (dashboardState.fromDate) return new Date(`${dashboardState.fromDate}T00:00:00`);
-  if (dashboardState.period === "week") return window.UniteOps.startOfWeek(now);
-  if (dashboardState.period === "month") return new Date(now.getFullYear(), now.getMonth(), 1);
-  if (dashboardState.period === "year") return new Date(now.getFullYear(), 0, 1);
-  return new Date("2000-01-01T00:00:00");
+  if (dashboardState.period === "week") {
+    const start = window.UniteOps.startOfWeek(now);
+    start.setHours(0, 0, 0, 0);
+    const nextWeek = new Date(start);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+    return { start:start.getTime(), end:nextWeek.getTime() - 1 };
+  }
+  if (dashboardState.period === "month") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { start:start.getTime(), end:nextMonth.getTime() - 1 };
+  }
+  if (dashboardState.period === "year") {
+    const start = new Date(now.getFullYear(), 0, 1);
+    const nextYear = new Date(now.getFullYear() + 1, 0, 1);
+    return { start:start.getTime(), end:nextYear.getTime() - 1 };
+  }
+  return { start:Number.NEGATIVE_INFINITY, end:Number.POSITIVE_INFINITY };
 };
-const endOfPeriod = () => {
-  if (dashboardState.toDate) return new Date(`${dashboardState.toDate}T23:59:59`);
-  const now = new Date(); now.setHours(23,59,59,999); return now;
+
+const bookingInterval = booking => {
+  const start = new Date(booking.checkinAt || booking.stayDate).getTime();
+  if (!Number.isFinite(start)) return null;
+  const rawEnd = new Date(booking.checkoutAt || booking.checkinAt || booking.stayDate).getTime();
+  return { start, end:Number.isFinite(rawEnd) && rawEnd > start ? rawEnd : start + 1 };
 };
+
 const filtered = () => {
-  const start = startOfPeriod().getTime(); const end = endOfPeriod().getTime();
+  const { start, end } = periodBounds();
   return dashboardState.bookings.filter(b => {
-    const t = new Date(b.checkinAt || b.stayDate).getTime();
-    if (!Number.isNaN(t) && (t < start || t > end)) return false;
+    const interval = bookingInterval(b);
+    if (interval && (interval.end <= start || interval.start > end)) return false;
+    if (!interval && (Number.isFinite(start) || Number.isFinite(end))) return false;
     if (dashboardState.branch !== "all" && b.branch !== dashboardState.branch) return false;
     if (dashboardState.source !== "all" && b.source !== dashboardState.source) return false;
     return true;
@@ -62,30 +91,47 @@ const renderKpis = (rows) => {
   const total = useful.reduce((s,b)=>s+Number(b.total||0),0);
   const paid = useful.reduce((s,b)=>s+Number(b.paid||b.deposit||0),0);
   const cancellations = rows.filter(b => ["cancelled","no_show"].includes(b.status)).length;
-  const periodStart = startOfPeriod().getTime();
-  const periodEnd = endOfPeriod().getTime();
-  const periodHours = Math.max(1, (periodEnd - periodStart) / 3600000);
-  const availableUnitCount = dashboardState.units.filter(unit => unit.status === "available").length;
+  const { start:periodStart, end:periodEnd } = periodBounds();
+  const hasFinitePeriod = Number.isFinite(periodStart) && Number.isFinite(periodEnd) && periodEnd > periodStart;
+  const periodHours = hasFinitePeriod ? (periodEnd - periodStart + 1) / 3600000 : 0;
+  const availableUnitCount = dashboardState.units.filter(unit =>
+    unit.status === "available"
+    && (dashboardState.branch === "all" || unit.branch === dashboardState.branch)
+  ).length;
   const occupiedStatuses = ["holding","deposited","paid","checked_in","checked_out"];
   const occupiedHours = rows.filter(b => occupiedStatuses.includes(b.status) && b.roomUnitCode).reduce((sum, b) => {
-    const start = Math.max(periodStart, new Date(b.checkinAt).getTime());
-    const end = Math.min(periodEnd, new Date(b.checkoutAt).getTime());
-    return sum + (Number.isFinite(start) && Number.isFinite(end) && end > start ? (end - start) / 3600000 : 0);
+    if (!hasFinitePeriod) return sum;
+    const interval = bookingInterval(b);
+    if (!interval) return sum;
+    const start = Math.max(periodStart, interval.start);
+    const end = Math.min(periodEnd + 1, interval.end);
+    return sum + (end > start ? (end - start) / 3600000 : 0);
   }, 0);
   const occupancyBase = availableUnitCount * periodHours;
-  const occupancy = occupancyBase ? Math.min(100, Math.round((occupiedHours / occupancyBase) * 100)) : 0;
+  const canCalculateOccupancy = hasFinitePeriod && occupancyBase > 0;
+  const occupancy = canCalculateOccupancy
+    ? `${Math.min(100, Math.round((occupiedHours / occupancyBase) * 100))}%`
+    : "N/A";
+  const occupancyNote = !hasFinitePeriod
+    ? `Chọn đủ Từ ngày và Đến ngày để tính · ${cancellations} hủy/no-show`
+    : availableUnitCount === 0
+      ? `Không có phòng khả dụng trong bộ lọc · ${cancellations} hủy/no-show`
+      : `${availableUnitCount} phòng khả dụng · ${cancellations} hủy/no-show`;
   const cards = [
     ["Doanh thu ghi nhận", window.UniteOps.money(revenue), "Theo trạng thái đã thanh toán/check-in/check-out hoặc đã thu"],
     ["Booking", window.UniteOps.number(rows.length), `${useful.length} booking đang/đã phục vụ`],
     ["Đã thu/cọc", window.UniteOps.money(paid), `Còn lại ${window.UniteOps.money(Math.max(0,total-paid))}`],
-    ["Tỷ lệ lấp theo giờ", `${occupancy}%`, `${availableUnitCount} phòng khả dụng · ${cancellations} hủy/no-show`]
+    ["Tỷ lệ lấp theo giờ", occupancy, occupancyNote]
   ];
   $("#dashboardKpis").innerHTML = cards.map(([a,b,c]) => `<article class="kpi-card"><span>${a}</span><strong>${b}</strong><small>${c}</small></article>`).join("");
 };
 
 const renderBarChart = (id, entries, money = false) => {
   const max = Math.max(1, ...entries.map(x=>x[1]));
-  $(id).innerHTML = entries.slice(0,10).map(([label,value]) => `<div class="chart-bar-row"><span>${escape(label)}</span><div class="chart-track"><i style="width:${Math.max(4, value/max*100)}%"></i></div><strong>${money ? window.UniteOps.money(value) : window.UniteOps.number(value)}</strong></div>`).join("") || `<p class="sync-note">Chưa có dữ liệu.</p>`;
+  $(id).innerHTML = entries.slice(0,10).map(([label,value]) => {
+    const width = Number(value) > 0 ? Math.max(4, Number(value) / max * 100) : 0;
+    return `<div class="chart-bar-row"><span>${escape(label)}</span><div class="chart-track" aria-hidden="true"><i style="width:${width}%"></i></div><strong>${money ? window.UniteOps.money(value) : window.UniteOps.number(value)}</strong></div>`;
+  }).join("") || `<p class="sync-note">Chưa có dữ liệu.</p>`;
 };
 const renderLineChart = (id, entries) => {
   const max = Math.max(1, ...entries.map(x=>x[1]));

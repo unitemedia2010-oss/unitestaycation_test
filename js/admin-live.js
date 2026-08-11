@@ -4,9 +4,13 @@
 (() => {
   const $ = (s, r=document) => r.querySelector(s);
   const $$ = (s, r=document) => [...r.querySelectorAll(s)];
-  const state = { branches: [], roomTypes: [], roomUnits: [], prices: [], promos: [], images: [], profiles: [], tab: "branches", selectedRoomType: "" };
+  const state = { branches: [], roomTypes: [], roomUnits: [], prices: [], promos: [], images: [], profiles: [], tab: "branches", selectedRoomType: "", liveText: "Live Supabase" };
 
-  const setStateText = (text) => { const el = $("#adminLiveState"); if (el) el.textContent = text; };
+  const setStateText = (text) => {
+    state.liveText = text;
+    const el = $("#adminLiveState");
+    if (el) el.textContent = text;
+  };
   const escape = (v="") => String(v).replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
 
   const loadAll = async () => {
@@ -38,6 +42,44 @@
   };
   const remove = async (table, id) => window.UniteOps.restFetch(`${table}?id=eq.${id}`, { method: "DELETE" });
 
+  const branchDependencies = (branchId) => ({
+    layouts: state.roomTypes.filter(row => row.branch_id === branchId),
+    units: state.roomUnits.filter(row => row.branch_id === branchId)
+  });
+
+  const loadBranchBookingCount = async (branchId) => {
+    const rows = await window.UniteOps.restFetch(`bookings?branch_id=eq.${encodeURIComponent(branchId)}&select=id&limit=1000`);
+    return Array.isArray(rows) ? rows.length : 0;
+  };
+
+  const isMissingBranchToggleRpc = (error) => /set_branch_active|PGRST202|schema cache|could not find the function/i.test(String(error?.message || error || ""));
+
+  const setBranchActive = async (branchId, isActive) => {
+    try {
+      const rows = await window.UniteOps.restFetch("rpc/set_branch_active", {
+        method: "POST",
+        body: JSON.stringify({ p_branch_id: branchId, p_is_active: isActive })
+      });
+      return Array.isArray(rows) ? rows[0] : rows;
+    } catch (error) {
+      // Giữ tương thích trong lúc migration V15.5 chưa được chạy trên dự án cũ.
+      if (!isMissingBranchToggleRpc(error)) throw error;
+      const rows = await upsert("branches", { is_active: isActive }, branchId);
+      return Array.isArray(rows) ? rows[0] : rows;
+    }
+  };
+
+  const friendlyBranchError = (error) => {
+    const message = String(error?.message || error || "Lỗi không xác định");
+    if (/23503|foreign key|violates.*constraint|bookings_.*_fkey/i.test(message)) {
+      return "Chi nhánh vẫn đang được booking tham chiếu nên Supabase bảo vệ và không cho xóa. Hãy chọn ‘Ẩn khỏi web’ để giữ lịch sử khách, cọc và thanh toán.";
+    }
+    if (/42501|row-level security|permission denied|not allowed/i.test(message)) {
+      return "Tài khoản hiện tại không có quyền thực hiện thao tác này. Vui lòng dùng tài khoản Admin hoặc Super Admin đang hoạt động.";
+    }
+    return `Không thể cập nhật chi nhánh: ${message}`;
+  };
+
   const branchOptions = (selected="") => state.branches.map(b => `<option value="${b.id}" ${b.id===selected?"selected":""}>${escape(b.name)}</option>`).join("");
   const roomTypeOptions = (selected="") => state.roomTypes.map(r => `<option value="${r.id}" ${r.id===selected?"selected":""}>${escape(r.code)} · ${escape(r.name)} · ${escape(r.branches?.name || "")}</option>`).join("");
 
@@ -52,7 +94,8 @@
     const current = state.roomUnits.filter(u => u.room_type_id === type.id).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
     for (let i = 1; i <= desired; i++) {
       const existing = current[i - 1];
-      const payload = { branch_id:type.branch_id, room_type_id:type.id, code:`${type.code}-P${i}`, unit_name:`Phòng ${i}`, status:"available", sort_order:i };
+      const status = existing?.status && existing.status !== "hidden" ? existing.status : "available";
+      const payload = { branch_id:type.branch_id, room_type_id:type.id, code:`${type.code}-P${i}`, unit_name:`Phòng ${i}`, status, sort_order:i };
       await upsert("room_units", payload, existing?.id || null);
     }
     for (const extra of current.slice(desired)) {
@@ -73,8 +116,11 @@
         <label>Trạng thái<select name="is_active"><option value="true">Đang mở</option><option value="false">Tạm ẩn</option></select></label>
         <button class="btn primary" type="submit">Lưu chi nhánh</button>
       </form>
-      <div class="ops-panel"><span class="panel-kicker">Current</span><h2>Danh sách chi nhánh</h2><div class="admin-live-list">${state.branches.map(b => `
-        <div class="admin-live-item"><div><strong>${escape(b.name)}</strong><small>${escape(b.area || "")} · ${escape(b.public_address || "")} · ${b.is_active ? "Đang mở" : "Đang ẩn"}</small></div><div class="ops-actions"><button class="btn soft small" data-edit-branch="${b.id}">Sửa</button><button class="btn soft small" data-delete-branch="${b.id}">Xóa</button></div></div>`).join("")}</div></div>
+      <div class="ops-panel"><span class="panel-kicker">Current</span><h2>Danh sách chi nhánh</h2><p class="sync-note">“Ẩn khỏi web” sẽ ngừng nhận booking mới nhưng vẫn giữ nguyên lịch, cọc, thanh toán và bill cũ. Chỉ chi nhánh hoàn toàn trống mới được xóa vĩnh viễn.</p><div class="admin-live-list">${state.branches.map(b => {
+        const dependencies = branchDependencies(b.id);
+        const canDeleteEmpty = dependencies.layouts.length === 0 && dependencies.units.length === 0 && window.UniteAuth?.hasRole?.(["super_admin"]);
+        return `<div class="admin-live-item"><div><strong>${escape(b.name)}</strong><small>${escape(b.area || "")} · ${escape(b.public_address || "")} · ${b.is_active ? "Đang mở" : "Đang ẩn"}</small><small>${dependencies.layouts.length} layout · ${dependencies.units.length} phòng cụ thể</small></div><div class="ops-actions"><button class="btn soft small" type="button" data-edit-branch="${b.id}">Sửa</button><button class="btn soft small" type="button" data-toggle-branch="${b.id}" aria-label="${b.is_active ? "Ẩn" : "Mở lại"} ${escape(b.name)}">${b.is_active ? "Ẩn khỏi web" : "Mở lại"}</button>${canDeleteEmpty ? `<button class="btn soft small" type="button" data-delete-empty-branch="${b.id}">Xóa chi nhánh trống</button>` : ""}</div></div>`;
+      }).join("")}</div></div>
     </section>`;
 
   const renderLayouts = () => `
@@ -101,6 +147,7 @@
     <section class="ops-layout">
       <form class="ops-panel ops-form-grid" id="priceForm">
         <div class="span-3"><span class="panel-kicker">Pricing</span><h2>Giá chuẩn theo layout</h2><p class="sync-note">Chọn đúng layout + gói để cập nhật giá hiện có, không cần xóa rồi tạo lại.</p></div>
+        <input type="hidden" name="id">
         <label class="span-2">Layout<select name="room_type_id" required>${roomTypeOptions()}</select></label>
         <label>Gói<select name="package_code"><option value="3h">3 tiếng</option><option value="4h">4 tiếng</option><option value="8h">8 tiếng</option><option value="day">Theo ngày</option><option value="night">Qua đêm</option></select></label>
         <label>Tên gói<input name="package_label" placeholder="3 tiếng"></label>
@@ -112,6 +159,7 @@
       </form>
       <form class="ops-panel ops-form-grid" id="promoForm">
         <div class="span-3"><span class="panel-kicker">Promotion</span><h2>Bật/tắt giao diện giảm giá</h2><p class="sync-note">Mỗi layout dùng một khuyến mãi hiện hành; chọn “Tất cả layout” để tạo ưu đãi toàn hệ thống.</p></div>
+        <input type="hidden" name="id">
         <label class="span-2">Layout<select name="room_type_id"><option value="">Tất cả layout</option>${roomTypeOptions()}</select></label>
         <label>Tiêu đề<input name="title" required placeholder="Ưu đãi trong tuần"></label>
         <label>Giảm %<input name="discount_percent" type="number" min="0" max="100" placeholder="10"></label>
@@ -161,7 +209,7 @@
     const mount = $("#adminLiveMount"); if (!mount) return;
     const tabs = { branches:"Chi nhánh", layouts:"Layout/phòng", prices:"Giá & KM", images:"Ảnh phòng", ...(window.UniteAuth?.hasRole?.(["super_admin"]) ? { accounts:"Tài khoản" } : {}) };
     if (!tabs[state.tab]) state.tab = "branches";
-    mount.innerHTML = `<div class="ops-actions" style="justify-content:space-between"><span class="live-state" id="adminLiveState">Live Supabase</span><button class="btn soft small" type="button" id="reloadAdminLive">Tải lại</button></div><div class="admin-live-tabs">${Object.entries(tabs).map(([key,label]) => `<button type="button" data-tab="${key}" class="${state.tab===key?"active":""}">${label}</button>`).join("")}</div><div>${state.tab==="branches"?renderBranches():state.tab==="layouts"?renderLayouts():state.tab==="prices"?renderPrices():state.tab==="images"?renderImages():renderAccounts()}</div>`;
+    mount.innerHTML = `<div class="ops-actions" style="justify-content:space-between"><span class="live-state" id="adminLiveState">${escape(state.liveText)}</span><button class="btn soft small" type="button" id="reloadAdminLive">Tải lại</button></div><div class="admin-live-tabs">${Object.entries(tabs).map(([key,label]) => `<button type="button" data-tab="${key}" class="${state.tab===key?"active":""}">${label}</button>`).join("")}</div><div>${state.tab==="branches"?renderBranches():state.tab==="layouts"?renderLayouts():state.tab==="prices"?renderPrices():state.tab==="images"?renderImages():renderAccounts()}</div>`;
     bind();
   };
 
@@ -171,9 +219,75 @@
     $("#reloadAdminLive")?.addEventListener("click", loadAll);
     $$("[data-tab]").forEach(btn => btn.addEventListener("click", () => { state.tab = btn.dataset.tab; render(); }));
 
-    $("#branchForm")?.addEventListener("submit", async e => { e.preventDefault(); const f=e.currentTarget; const payload={ name:f.name.value.trim(), slug:f.slug.value.trim(), area:f.area.value.trim(), public_address:f.public_address.value.trim(), sort_order:Number(f.sort_order.value||0), is_active:f.is_active.value==="true" }; await upsert("branches", payload, f.id.value || null); await loadAll(); });
+    $("#branchForm")?.addEventListener("submit", async e => {
+      e.preventDefault();
+      const f=e.currentTarget;
+      const submitButton=f.querySelector('[type="submit"]');
+      const payload={ name:f.name.value.trim(), slug:f.slug.value.trim(), area:f.area.value.trim(), public_address:f.public_address.value.trim(), sort_order:Number(f.sort_order.value||0), is_active:f.is_active.value==="true" };
+      if (submitButton) submitButton.disabled=true;
+      try {
+        await upsert("branches", payload, f.id.value || null);
+        await loadAll();
+      } catch (error) {
+        setStateText(friendlyBranchError(error));
+        alert(friendlyBranchError(error));
+      } finally {
+        if (submitButton?.isConnected) submitButton.disabled=false;
+      }
+    });
     $$("[data-edit-branch]").forEach(btn => btn.addEventListener("click", () => { const b=state.branches.find(x=>x.id===btn.dataset.editBranch); state.tab="branches"; render(); fillForm($("#branchForm"), b); }));
-    $$("[data-delete-branch]").forEach(btn => btn.addEventListener("click", async () => { if(confirm("Xóa chi nhánh này?")){ await remove("branches", btn.dataset.deleteBranch); await loadAll(); } }));
+    $$("[data-toggle-branch]").forEach(btn => btn.addEventListener("click", async () => {
+      const branch=state.branches.find(row=>row.id===btn.dataset.toggleBranch);
+      if (!branch) return;
+      const dependencies=branchDependencies(branch.id);
+      const nextActive=!branch.is_active;
+      btn.disabled=true;
+      setStateText("Đang kiểm tra booking của chi nhánh...");
+      try {
+        const bookingCount=await loadBranchBookingCount(branch.id);
+        const message=nextActive
+          ? `Mở lại “${branch.name}” trên website?\n\n${dependencies.layouts.length} layout, ${dependencies.units.length} phòng và ${bookingCount} booking cũ vẫn được giữ nguyên.`
+          : `Ẩn “${branch.name}” khỏi website?\n\nChi nhánh sẽ ngừng nhận booking mới. ${dependencies.layouts.length} layout, ${dependencies.units.length} phòng và ${bookingCount} booking cũ vẫn được giữ để CSKH xử lý. Bạn có thể mở lại bất cứ lúc nào.`;
+        if (!confirm(message)) {
+          setStateText("Đã hủy thao tác · chưa thay đổi dữ liệu");
+          return;
+        }
+        await setBranchActive(branch.id, nextActive);
+        await loadAll();
+        alert(nextActive ? `Đã mở lại ${branch.name}.` : `Đã ẩn ${branch.name} khỏi website; booking và thanh toán cũ vẫn an toàn.`);
+      } catch (error) {
+        setStateText(friendlyBranchError(error));
+        alert(friendlyBranchError(error));
+      } finally {
+        if (btn.isConnected) btn.disabled=false;
+      }
+    }));
+    $$("[data-delete-empty-branch]").forEach(btn => btn.addEventListener("click", async () => {
+      const branch=state.branches.find(row=>row.id===btn.dataset.deleteEmptyBranch);
+      if (!branch) return;
+      btn.disabled=true;
+      setStateText("Đang xác nhận chi nhánh hoàn toàn trống...");
+      try {
+        const dependencies=branchDependencies(branch.id);
+        const bookingCount=await loadBranchBookingCount(branch.id);
+        if (dependencies.layouts.length || dependencies.units.length || bookingCount) {
+          throw new Error(`Chi nhánh còn ${dependencies.layouts.length} layout, ${dependencies.units.length} phòng hoặc ${bookingCount} booking. Hãy dùng “Ẩn khỏi web”.`);
+        }
+        const typed=prompt(`Đây là thao tác không thể hoàn tác. Nhập đúng slug “${branch.slug}” để xóa chi nhánh trống:`);
+        if (typed !== branch.slug) {
+          setStateText("Đã hủy xóa · slug xác nhận không khớp");
+          return;
+        }
+        await remove("branches", branch.id);
+        await loadAll();
+        alert(`Đã xóa chi nhánh trống ${branch.name}.`);
+      } catch (error) {
+        setStateText(friendlyBranchError(error));
+        alert(friendlyBranchError(error));
+      } finally {
+        if (btn.isConnected) btn.disabled=false;
+      }
+    }));
 
     $("#layoutForm")?.addEventListener("submit", async e => { e.preventDefault(); const f=e.currentTarget; const payload={ branch_id:f.branch_id.value, code:f.code.value.trim(), name:f.name.value.trim(), category:f.category.value.trim(), price_tier:f.price_tier.value, inventory_count:Number(f.inventory_count.value||0), vibe:f.vibe.value.trim(), description:f.description.value.trim(), status:f.status.value, is_published:f.status.value!=="hidden" }; const rows=await upsert("room_types", payload, f.id.value||null); const saved=(Array.isArray(rows)?rows[0]:rows); await ensureUnits(saved || f.id.value, payload.inventory_count); await loadAll(); });
     $$("[data-edit-layout]").forEach(btn => btn.addEventListener("click", () => { const r=state.roomTypes.find(x=>x.id===btn.dataset.editLayout); state.tab="layouts"; render(); fillForm($("#layoutForm"), r); }));
@@ -182,7 +296,9 @@
     $("#priceForm")?.addEventListener("submit", async e => {
       e.preventDefault();
       const f=e.currentTarget;
-      const existing=state.prices.find(p => p.room_type_id===f.room_type_id.value && p.package_code===f.package_code.value && !p.starts_at && !p.ends_at);
+      const existing=f.id.value
+        ? state.prices.find(p => p.id===f.id.value)
+        : state.prices.find(p => p.room_type_id===f.room_type_id.value && p.package_code===f.package_code.value && !p.starts_at && !p.ends_at);
       await upsert("room_prices", { room_type_id:f.room_type_id.value, package_code:f.package_code.value, package_label:f.package_label.value || f.package_code.options[f.package_code.selectedIndex].text, base_price:Number(f.base_price.value||0), sale_price:f.sale_price.value?Number(f.sale_price.value):null, sort_order:Number(f.sort_order.value||0), is_active:f.is_active.value==="true" }, existing?.id || null);
       await loadAll();
     });
@@ -193,7 +309,7 @@
       const f=e.currentTarget;
       const roomTypeId=f.room_type_id.value || null;
       const matches=state.promos.filter(p => (p.room_type_id || null) === roomTypeId);
-      const existing=matches[0];
+      const existing=f.id.value ? state.promos.find(p => p.id===f.id.value) : matches[0];
       for (const oldPromo of matches.slice(1)) await upsert("promotions", { is_active:false }, oldPromo.id);
       await upsert("promotions", { room_type_id:roomTypeId, title:f.title.value.trim(), discount_percent:f.discount_percent.value?Number(f.discount_percent.value):null, discount_amount:f.discount_amount.value?Number(f.discount_amount.value):null, badge_label:f.badge_label.value.trim(), show_badge:true, is_active:f.is_active.value==="true" }, existing?.id || null);
       await loadAll();
@@ -212,7 +328,22 @@
       await loadAll();
     }));
 
-    $("#accountForm")?.addEventListener("submit", async e => { e.preventDefault(); const f=e.currentTarget; const userId=f.user_id.value.trim(); const existing=state.profiles.find(p=>p.user_id===userId); await upsert("app_profiles", { user_id:userId, email:f.email.value.trim(), full_name:f.full_name.value.trim(), role:f.role.value, is_active:f.is_active.value==="true" }, existing?.id || null); await loadAll(); alert("Đã lưu quyền. Nếu user chưa tồn tại trong Authentication thì tạo user trong Supabase trước."); });
+    $("#accountForm")?.addEventListener("submit", async e => {
+      e.preventDefault();
+      const f=e.currentTarget;
+      const userId=f.user_id.value.trim();
+      const existing=state.profiles.find(p=>p.user_id===userId);
+      const current=window.UniteAuth?.profile?.();
+      const isSelf=Boolean(current && (current.user_id===userId || current.id===existing?.id));
+      const nextActive=f.is_active.value==="true";
+      if (isSelf && (!nextActive || f.role.value!=="super_admin")) {
+        alert("Không thể tự khóa hoặc hạ quyền tài khoản Super Admin đang đăng nhập. Hãy dùng một Super Admin khác để thực hiện thay đổi này.");
+        return;
+      }
+      await upsert("app_profiles", { user_id:userId, email:f.email.value.trim(), full_name:f.full_name.value.trim(), role:f.role.value, is_active:nextActive }, existing?.id || null);
+      await loadAll();
+      alert("Đã lưu quyền. Nếu user chưa tồn tại trong Authentication thì tạo user trong Supabase trước.");
+    });
     $$("[data-edit-profile]").forEach(btn => btn.addEventListener("click", () => { const row=state.profiles.find(x=>x.id===btn.dataset.editProfile); if(row) fillForm($("#accountForm"), row); }));
   };
 
@@ -226,6 +357,6 @@
     main.prepend(section);
   };
 
-  window.addEventListener("unite:auth-ready", () => { document.body.classList.add("live-admin-ready"); mountBase(); loadAll(); });
+  window.addEventListener("unite:auth-ready", () => { document.body.classList.add("live-admin-ready"); mountBase(); render(); loadAll(); });
   document.addEventListener("DOMContentLoaded", () => window.UniteAuth?.require(["super_admin", "admin"]));
 })();

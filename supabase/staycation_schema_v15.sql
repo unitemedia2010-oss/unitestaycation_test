@@ -375,6 +375,59 @@ do $$ declare t text; begin
   end loop;
 end $$;
 
+drop function if exists public.set_branch_active(uuid, boolean);
+create function public.set_branch_active(
+  p_branch_id uuid,
+  p_is_active boolean
+)
+returns table(
+  branch_id uuid,
+  branch_name text,
+  is_active boolean,
+  layout_count bigint,
+  unit_count bigint,
+  booking_count bigint
+)
+language plpgsql
+security invoker
+set search_path = pg_catalog, pg_temp
+as $$
+declare
+  v_branch public.branches%rowtype;
+begin
+  if public.current_app_role() not in ('super_admin', 'admin') then
+    raise exception 'Tài khoản không có quyền cập nhật chi nhánh'
+      using errcode = '42501';
+  end if;
+
+  update public.branches br
+  set is_active = p_is_active
+  where br.id = p_branch_id
+  returning br.* into v_branch;
+
+  if not found then
+    raise exception 'Không tìm thấy chi nhánh hoặc tài khoản không có quyền cập nhật'
+      using errcode = 'P0002';
+  end if;
+
+  return query
+  select
+    v_branch.id,
+    v_branch.name,
+    v_branch.is_active,
+    (select count(*) from public.room_types rt where rt.branch_id = v_branch.id),
+    (select count(*) from public.room_units ru where ru.branch_id = v_branch.id),
+    (select count(*) from public.bookings bk where bk.branch_id = v_branch.id);
+end;
+$$;
+
+comment on function public.set_branch_active(uuid, boolean)
+is 'Ẩn/mở lại chi nhánh mà không xóa layout, phòng, booking, payment hoặc bill lịch sử.';
+
+revoke all on function public.set_branch_active(uuid, boolean) from public;
+revoke all on function public.set_branch_active(uuid, boolean) from anon;
+grant execute on function public.set_branch_active(uuid, boolean) to authenticated;
+
 -- Buckets
 insert into storage.buckets (id, name, public) values ('room-images', 'room-images', true) on conflict (id) do update set public = true;
 insert into storage.buckets (id, name, public) values ('payment-bills', 'payment-bills', false) on conflict (id) do update set public = false;
@@ -392,7 +445,7 @@ insert into public.branches (slug, name, area, public_address, sort_order) value
   ('nhieu-tu','Chi nhánh Nhiêu Tứ','Phú Nhuận','Chi nhánh Nhiêu Tứ, Phú Nhuận',10),
   ('phan-tay-ho','Chi nhánh Phan Tây Hồ','Phú Nhuận','Chi nhánh Phan Tây Hồ, Phú Nhuận',20),
   ('le-van-si','Chi nhánh Lê Văn Sĩ','Phú Nhuận','Chi nhánh Lê Văn Sĩ, Phú Nhuận',30)
-on conflict (slug) do update set name=excluded.name, area=excluded.area, public_address=excluded.public_address, sort_order=excluded.sort_order, is_active=true;
+on conflict (slug) do update set name=excluded.name, area=excluded.area, public_address=excluded.public_address, sort_order=excluded.sort_order;
 
 insert into public.room_types (branch_id, code, name, category, price_tier, vibe, short_line, description, inventory_count, sort_order)
 select b.id, v.code, v.name, v.category, v.price_tier, v.vibe, v.short_line, v.description, 3, v.sort_order
@@ -406,7 +459,7 @@ from (values
   ('le-van-si','C12-ROMA','Roma Layout','Classic studio','premium','Classic · elegant · private stay','Layout cổ điển, riêng tư.','Phòng có cảm giác sang và yên tĩnh.',70)
 ) as v(slug,code,name,category,price_tier,vibe,short_line,description,sort_order)
 join public.branches b on b.slug = v.slug
-on conflict (code) do update set name=excluded.name, branch_id=excluded.branch_id, category=excluded.category, price_tier=excluded.price_tier, vibe=excluded.vibe, short_line=excluded.short_line, description=excluded.description, inventory_count=3, sort_order=excluded.sort_order, is_published=true, status='available';
+on conflict (code) do update set name=excluded.name, branch_id=excluded.branch_id, category=excluded.category, price_tier=excluded.price_tier, vibe=excluded.vibe, short_line=excluded.short_line, description=excluded.description, inventory_count=3, sort_order=excluded.sort_order;
 
 -- 3 phòng thật cho mỗi layout
 do $$ declare rt record; i int; begin
@@ -414,7 +467,7 @@ do $$ declare rt record; i int; begin
     for i in 1..3 loop
       insert into public.room_units (branch_id, room_type_id, code, unit_name, sort_order)
       values (rt.branch_id, rt.id, rt.code || '-P' || i, 'Phòng ' || i, i)
-      on conflict (code) do update set branch_id=excluded.branch_id, room_type_id=excluded.room_type_id, unit_name=excluded.unit_name, sort_order=excluded.sort_order, status='available';
+      on conflict (code) do update set branch_id=excluded.branch_id, room_type_id=excluded.room_type_id, unit_name=excluded.unit_name, sort_order=excluded.sort_order;
     end loop;
   end loop;
 end $$;
@@ -490,8 +543,21 @@ create policy "super admin manage profiles" on public.app_profiles for all to au
 
 -- Public read catalogue; admin manage catalogue
 create policy "public read active branches" on public.branches for select to anon, authenticated using (is_active = true or public.is_ops_user());
-create policy "admin manage branches" on public.branches for all to authenticated using (public.is_admin_user()) with check (public.is_admin_user());
-create policy "public read published room types" on public.room_types for select to anon, authenticated using (is_published = true or public.is_ops_user());
+create policy "admin insert branches" on public.branches for insert to authenticated with check (public.is_admin_user());
+create policy "admin update branches" on public.branches for update to authenticated using (public.is_admin_user()) with check (public.is_admin_user());
+create policy "super admin delete empty branches" on public.branches for delete to authenticated using (
+  public.is_super_admin()
+  and not exists (select 1 from public.room_types rt where rt.branch_id = branches.id)
+  and not exists (select 1 from public.room_units ru where ru.branch_id = branches.id)
+  and not exists (select 1 from public.bookings bk where bk.branch_id = branches.id)
+);
+create policy "public read published room types" on public.room_types for select to anon, authenticated using (
+  public.is_ops_user()
+  or (
+    is_published = true
+    and exists (select 1 from public.branches br where br.id = room_types.branch_id and br.is_active = true)
+  )
+);
 create policy "admin manage room types" on public.room_types for all to authenticated using (public.is_admin_user()) with check (public.is_admin_user());
 create policy "ops read room units" on public.room_units for select to authenticated using (public.is_ops_user());
 create policy "admin manage room units" on public.room_units for all to authenticated using (public.is_admin_user()) with check (public.is_admin_user());
