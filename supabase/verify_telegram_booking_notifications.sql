@@ -1,6 +1,6 @@
 -- Unite Staycation - verification for Telegram booking notification outbox.
--- Run after 20260814094602_telegram_booking_notifications.sql.
--- Every query in sections 1-4 is read-only. Section 5 writes only inside a
+-- Run after both Telegram migrations in timestamp order.
+-- Every query in sections 1-5 is read-only. Section 6 writes only inside a
 -- transaction that is always rolled back, so it does not notify Telegram.
 
 -- 1. Expected: rls_enabled=true and rls_forced=false.
@@ -97,7 +97,51 @@ join pg_catalog.pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'private'
   and p.proname = 'enqueue_booking_telegram_notification';
 
--- 5. Optional transactional smoke test.
+-- 5. Expected: pg_net is installed, one adequately long named Vault secret
+-- exists, and the outbox AFTER INSERT trigger calls a non-public private
+-- SECURITY DEFINER helper. No query below returns the decrypted secret.
+select extname, extversion
+from pg_catalog.pg_extension
+where extname = 'pg_net';
+
+select exists (
+  select 1
+  from vault.decrypted_secrets
+  where name = 'telegram_booking_webhook_secret'
+    and pg_catalog.length(decrypted_secret) >= 32
+) as vault_secret_ready;
+
+select
+  trg.tgname,
+  trg.tgenabled = 'O' as enabled,
+  pg_catalog.pg_get_triggerdef(trg.oid) as definition
+from pg_catalog.pg_trigger trg
+where trg.tgrelid = 'public.booking_notification_deliveries'::regclass
+  and not trg.tgisinternal
+  and trg.tgname = 'telegram_booking_delivery_insert';
+
+select
+  n.nspname as function_schema,
+  p.proname as function_name,
+  p.prosecdef as security_definer,
+  p.proconfig as function_settings,
+  p.proacl as execute_acl,
+  pg_catalog.has_function_privilege(
+    'anon',
+    p.oid,
+    'EXECUTE'
+  ) as anon_can_execute,
+  pg_catalog.has_function_privilege(
+    'authenticated',
+    p.oid,
+    'EXECUTE'
+  ) as authenticated_can_execute
+from pg_catalog.pg_proc p
+join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'private'
+  and p.proname = 'dispatch_booking_telegram_notification';
+
+-- 6. Optional transactional smoke test.
 -- Expected NOTICEs:
 --   qualified booking delivery count = 1
 --   duplicate insert affected rows = 0

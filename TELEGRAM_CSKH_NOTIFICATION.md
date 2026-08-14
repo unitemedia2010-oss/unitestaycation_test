@@ -20,6 +20,8 @@ lại.
 
 - `supabase/migrations/20260814094602_telegram_booking_notifications.sql`:
   transactional outbox, RLS, quyền tối thiểu và trigger enqueue.
+- `supabase/migrations/20260814101932_telegram_booking_webhook_vault.sql`:
+  `pg_net`, trigger gọi Edge Function bất đồng bộ và khóa webhook đọc từ Vault.
 - `supabase/functions/notify-booking-telegram/index.ts`: xác thực webhook, khóa
   delivery, gửi Telegram và cập nhật trạng thái.
 - `supabase/functions/notify-booking-telegram/_shared.ts`: tạo nội dung tin,
@@ -38,19 +40,23 @@ TELEGRAM_CHAT_ID
 BOOKING_WEBHOOK_SECRET
 ```
 
-`BOOKING_WEBHOOK_SECRET` phải là chuỗi ngẫu nhiên tối thiểu 32 ký tự. Supabase tự
-cấp các biến kết nối server-side cần thiết cho Edge Function.
+`BOOKING_WEBHOOK_SECRET` phải là chuỗi ngẫu nhiên tối thiểu 32 ký tự. Cùng giá
+trị này được lưu mã hóa trong Supabase Vault với tên
+`telegram_booking_webhook_secret`. Không đưa giá trị thật vào migration.
 
 ## Cấu hình Database Webhook
 
-- Table: `public.booking_notification_deliveries`
-- Event: chỉ `INSERT`
-- Method: `POST`
-- URL:
-  `https://icudxncctjselkjcbjvp.supabase.co/functions/v1/notify-booking-telegram`
-- Header:
-  - `Content-Type: application/json`
-  - `x-booking-webhook-secret: <cùng giá trị BOOKING_WEBHOOK_SECRET>`
+Migration Vault tạo trigger `telegram_booking_delivery_insert` trên sự kiện
+`INSERT` của `public.booking_notification_deliveries`. Trigger đọc khóa đã mã
+hóa từ Vault và dùng `pg_net` để POST bất đồng bộ tới:
+
+```text
+https://icudxncctjselkjcbjvp.supabase.co/functions/v1/notify-booking-telegram
+```
+
+Khóa thật không nằm trong Git, migration hoặc trigger arguments. Nếu Vault hay
+`pg_net` tạm lỗi, exception được giữ khỏi giao dịch đặt phòng và delivery vẫn ở
+`pending` để vận hành kiểm tra/replay.
 
 Edge Function tắt kiểm tra JWT của nền tảng vì Database Webhook không có user
 JWT, nhưng request vẫn bắt buộc vượt qua secret riêng bằng so sánh constant-time.
@@ -71,9 +77,10 @@ CSKH phải đăng nhập mới xem được dữ liệu đầy đủ.
 
 1. Gửi một lệnh mới có nhắc username bot trong nhóm để lấy `chat_id`.
 2. Gửi tin kết nối thử bằng Bot API và xác nhận đúng nhóm.
-3. Chạy migration, sau đó chạy các truy vấn read-only và smoke test rollback.
-4. Deploy Edge Function với `verify_jwt = false` và đặt đủ ba secret.
-5. Tạo Database Webhook theo cấu hình trên.
+3. Chạy migration outbox và migration webhook Vault.
+4. Deploy Edge Function với `verify_jwt = false`, đặt đủ ba secret và lưu cùng
+   khóa webhook trong Vault.
+5. Xác minh request không khóa bị chặn `401` và trigger `pg_net` đang bật.
 6. Tạo một booking test được ghi rõ `TEST - KHÔNG XỬ LÝ`; xác minh một tin duy
    nhất xuất hiện, deep-link mở đúng đơn và delivery có trạng thái `sent`.
 
