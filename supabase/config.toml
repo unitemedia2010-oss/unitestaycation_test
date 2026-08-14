@@ -1,4 +1,7 @@
-project_id = "afjzycyffhhyifixtelq"
+project_id = "icudxncctjselkjcbjvp"
 
 [functions.create-ops-user]
+verify_jwt = false
+
+[functions.notify-booking-telegram]
 verify_jwt = false

@@ -2535,6 +2535,28 @@ const requestedStatusFilter = () => {
   }
 };
 
+const requestedBookingRef = () => {
+  try {
+    const bookingRef = new URLSearchParams(window.location.search).get("booking") || "";
+    return /^[A-Za-z0-9_-]{1,80}$/.test(bookingRef) ? bookingRef : "";
+  } catch {
+    return "";
+  }
+};
+
+const openRequestedBooking = () => {
+  const bookingRef = requestedBookingRef();
+  if (!bookingRef) return;
+  const booking = cskhState.bookings.find(row =>
+    row.id === bookingRef || row.supabaseId === bookingRef
+  );
+  if (!booking) {
+    showCskhToast("Không tìm thấy booking từ liên kết thông báo. Hãy tải lại danh sách và thử lại.");
+    return;
+  }
+  window.openCreateBookingModal(booking.id);
+};
+
 const bind = async () => {
   const week = window.UniteOps.startOfWeek(new Date());
   cskhState.weekStart = week;
@@ -2713,6 +2735,7 @@ const bind = async () => {
     if (cskhState.bookings.length > 0) {
       lastKnownBookingId = cskhState.bookings[0].id;
     }
+    openRequestedBooking();
     setupLiveNotifications();
   });
 };
