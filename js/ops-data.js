@@ -17,7 +17,8 @@ const opsBookingStatuses = {
 };
 
 const opsActiveBookingStatuses = ["holding", "deposited", "paid", "checked_in"];
-const opsUnitRequiredStatuses = ["checked_in", "checked_out"];
+const opsSoftBookingStatuses = ["new", "consulting"];
+const opsUnitRequiredStatuses = ["holding", "deposited", "paid", "checked_in"];
 const opsCalendarVisibleStatuses = ["new", "consulting", ...opsActiveBookingStatuses, "checked_out"];
 const OPS_TIME_ZONE = "Asia/Ho_Chi_Minh";
 const opsBookingSources = ["Website", "Zalo", "Fanpage chính", "Fanpage Lê Văn Sỹ", "Fanpage Tây Hồ", "Instagram", "Agoda", "Airbnb", "Booking", "Walk-in"];
@@ -49,7 +50,14 @@ const opsRestFetch = async (path, options = {}) => {
   const text = await res.text();
   let payload = null;
   try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
-  if (!res.ok) throw new Error(payload?.message || payload?.error || res.statusText);
+  if (!res.ok) {
+    const error = new Error(payload?.message || payload?.error || res.statusText);
+    error.code = payload?.code || `HTTP_${res.status}`;
+    error.details = payload?.details || null;
+    error.hint = payload?.hint || null;
+    error.status = res.status;
+    throw error;
+  }
   return payload;
 };
 
@@ -199,6 +207,25 @@ const opsFindConflicts = (bookings, draft, ignoreId = null) => {
     if (row.roomUnitCode !== normalized.roomUnitCode) return false;
     return opsRangesOverlap(normalized.checkinAt, normalized.checkoutAt, row.checkinAt, row.checkoutAt);
   });
+};
+const opsFindUnitOverlapAnomalies = (bookings = []) => {
+  const rows = bookings.map(normalizeBooking).filter(row => row.roomUnitCode);
+  const conflictsByBooking = new Map();
+  for (let leftIndex = 0; leftIndex < rows.length; leftIndex += 1) {
+    const left = rows[leftIndex];
+    for (let rightIndex = leftIndex + 1; rightIndex < rows.length; rightIndex += 1) {
+      const right = rows[rightIndex];
+      if (left.roomUnitCode !== right.roomUnitCode) continue;
+      if (!opsRangesOverlap(left.checkinAt, left.checkoutAt, right.checkinAt, right.checkoutAt)) continue;
+      const leftKey = left.supabaseId || left.id;
+      const rightKey = right.supabaseId || right.id;
+      if (!conflictsByBooking.has(leftKey)) conflictsByBooking.set(leftKey, []);
+      if (!conflictsByBooking.has(rightKey)) conflictsByBooking.set(rightKey, []);
+      conflictsByBooking.get(leftKey).push(right);
+      conflictsByBooking.get(rightKey).push(left);
+    }
+  }
+  return conflictsByBooking;
 };
 const opsRoomCapacityState = (bookings, draft, inventoryUnits = null, ignoreId = null) => {
   const normalized = normalizeBooking(draft);
@@ -390,8 +417,15 @@ const opsBookingPayload = async (booking) => {
   if (opsActiveBookingStatuses.includes(booking.status) && !roomType?.id) {
     throw new Error("Phải chọn đúng loại phòng / layout trước khi giữ chỗ hoặc ghi nhận thanh toán.");
   }
+  if (opsSoftBookingStatuses.includes(booking.status) && roomUnit?.id) {
+    const error = new Error("Đơn Mới/Đang tư vấn không được giữ phòng cụ thể. Hãy dùng thao tác Gán phòng để chuyển đơn sang Giữ phòng.");
+    error.code = "VALIDATION_ERROR";
+    throw error;
+  }
   if (opsUnitRequiredStatuses.includes(booking.status) && !roomUnit?.id) {
-    throw new Error("Phải xếp phòng cụ thể trước khi check-in hoặc hoàn thành lưu trú.");
+    const error = new Error("Trạng thái Giữ phòng/Đã cọc/Đã thanh toán/Đã check-in bắt buộc phải có phòng cụ thể.");
+    error.code = "VALIDATION_ERROR";
+    throw error;
   }
   return {
     public_code: booking.id,
@@ -419,6 +453,82 @@ const opsBookingPayload = async (booking) => {
     deposit_bill_path: booking.depositBillPath || null,
     full_payment_bill_path: booking.fullPaymentBillPath || null
   };
+};
+
+const opsAssignmentErrorMessages = {
+  ROOM_UNIT_CONFLICT:"Phòng vừa được một booking khác giữ trong khung giờ này. Hãy chọn phòng hoặc thời gian khác.",
+  ROOM_UNAVAILABLE:"Không còn phòng khả dụng cho layout và khung giờ đã chọn.",
+  BOOKING_STALE:"Đơn vừa được tài khoản khác cập nhật. Hãy tải lại đơn trước khi lưu tiếp.",
+  FORBIDDEN:"Tài khoản hiện tại không có quyền gán phòng.",
+  VALIDATION_ERROR:"Thông tin phòng hoặc thời gian chưa hợp lệ. Hãy kiểm tra lại."
+};
+
+const opsAssignRoomUnitV2Async = async (booking, {
+  roomTypeId = null,
+  roomUnitId = null
+} = {}) => {
+  if (!opsIsSupabaseConfigured() || !window.UniteAuth?.session?.()?.access_token || !booking?.supabaseId) {
+    return {
+      ok:false,
+      reason:"needs-live-booking",
+      code:"BOOKING_NOT_LIVE",
+      message:"Cần booking live trên Supabase và phiên đăng nhập CSKH để gán phòng an toàn."
+    };
+  }
+  if (!booking.updatedAt) {
+    return { ok:false, reason:"booking-stale", code:"BOOKING_STALE", message:opsAssignmentErrorMessages.BOOKING_STALE };
+  }
+
+  try {
+    const resolvedRoomType = roomTypeId ? { id:roomTypeId } : await opsFetchRoomType(booking.roomId);
+    const rows = await opsRestFetch("rpc/assign_booking_room_unit_v2", {
+      method:"POST",
+      body:JSON.stringify({
+        p_booking_id:booking.supabaseId,
+        p_expected_updated_at:booking.updatedAt,
+        p_room_type_id:resolvedRoomType?.id || null,
+        p_room_unit_id:roomUnitId || null,
+        p_checkin_at:opsToIso(booking.checkinAt),
+        p_checkout_at:opsToIso(booking.checkoutAt)
+      })
+    });
+    const assigned = Array.isArray(rows) ? rows[0] : rows;
+    if (!assigned || assigned.ok === false) {
+      const code = assigned?.error_code || "ROOM_UNAVAILABLE";
+      return {
+        ok:false,
+        reason:"assignment-rejected",
+        code,
+        message:opsAssignmentErrorMessages[code] || "Supabase từ chối thao tác gán phòng."
+      };
+    }
+    if (!assigned.room_unit_id || !assigned.room_unit_code) {
+      return { ok:false, reason:"invalid-response", code:"ROOM_UNAVAILABLE", message:opsAssignmentErrorMessages.ROOM_UNAVAILABLE };
+    }
+    return {
+      ok:true,
+      unit:assigned,
+      row:{
+        ...booking,
+        id:assigned.public_code || booking.id,
+        supabaseId:assigned.booking_id || booking.supabaseId,
+        status:assigned.status || "holding",
+        roomUnitCode:assigned.room_unit_code,
+        roomUnitName:assigned.room_unit_name || assigned.room_unit_code,
+        checkinAt:assigned.checkin_at || booking.checkinAt,
+        checkoutAt:assigned.checkout_at || booking.checkoutAt,
+        updatedAt:assigned.updated_at || booking.updatedAt
+      }
+    };
+  } catch (error) {
+    const code = opsAssignmentErrorMessages[error.code] ? error.code : (error.code || "ASSIGNMENT_FAILED");
+    return {
+      ok:false,
+      reason:code === "BOOKING_STALE" ? "booking-stale" : "assignment-failed",
+      code,
+      message:opsAssignmentErrorMessages[code] || error.message || String(error)
+    };
+  }
 };
 
 const opsLoadBookingsAsync = async () => {
@@ -625,6 +735,16 @@ const opsAutoAssignRoomUnitAsync = async (booking, { claimToken = null } = {}) =
     };
   }
   try {
+    // The V2 assignment RPC is the canonical path for normal CSKH assignment.
+    // QuickPay still uses the legacy claim-aware RPC because its write token is
+    // part of the payment-proof safety contract.
+    if (!claimToken) {
+      const assignedV2 = await opsAssignRoomUnitV2Async(booking, { roomUnitId:null });
+      if (assignedV2.ok) return assignedV2;
+      const rpcMissing = assignedV2.code === "PGRST202"
+        || /assign_booking_room_unit_v2|schema cache|function/i.test(assignedV2.message || "");
+      if (!rpcMissing) return assignedV2;
+    }
     const rows = await opsRestFetch("rpc/auto_assign_booking_room_unit", {
       method:"POST",
       body: JSON.stringify({
@@ -1038,6 +1158,7 @@ const opsSavePaymentProofAsync = async (booking, payment) => {
 window.UniteOps = {
   statuses: opsBookingStatuses,
   activeStatuses: opsActiveBookingStatuses,
+  softStatuses: opsSoftBookingStatuses,
   unitRequiredStatuses: opsUnitRequiredStatuses,
   calendarVisibleStatuses: opsCalendarVisibleStatuses,
   sources: opsBookingSources,
@@ -1063,6 +1184,7 @@ window.UniteOps = {
   bookingBalance: opsBookingBalance,
   rangesOverlap: opsRangesOverlap,
   findConflicts: opsFindConflicts,
+  findUnitOverlapAnomalies: opsFindUnitOverlapAnomalies,
   roomCapacityState: opsRoomCapacityState,
   availableUnits: opsAvailableUnits,
   downloadCsv: opsDownloadCsv,
@@ -1076,6 +1198,7 @@ window.UniteOps = {
   createBookingAsync: opsCreateBookingAsync,
   updateBookingAsync: opsUpdateBookingAsync,
   updateBookingCasAsync: opsUpdateBookingCasAsync,
+  assignRoomUnitV2Async: opsAssignRoomUnitV2Async,
   autoAssignRoomUnitAsync: opsAutoAssignRoomUnitAsync,
   releaseQuickPayClaimAsync: opsReleaseQuickPayClaimAsync,
   deleteBookingAsync: opsDeleteBookingAsync,

@@ -11,6 +11,7 @@ const cskhState = {
   source: "all",
   weekStart: null,
   calendarBranch: "all",
+  calendarDayIndex: 0,
   selectedBookingId: "",
   liveResult: null,
   inventoryResult: null
@@ -28,6 +29,109 @@ const escape = (value = "") => String(value).replace(/[&<>"']/g, character => ({
   "\"": "&quot;",
   "'": "&#039;"
 }[character]));
+
+const CSKH_TIME_VALUES = Array.from({ length: 48 }, (_, index) => {
+  const hours = String(Math.floor(index / 2)).padStart(2, "0");
+  const minutes = index % 2 ? "30" : "00";
+  return `${hours}:${minutes}`;
+});
+const splitLocalDateTime = value => {
+  const local = value ? window.UniteOps.toDatetimeLocal(value) : "";
+  return { date:local.slice(0, 10), time:local.slice(11, 16) };
+};
+const timeOptionsMarkup = selected => {
+  const values = CSKH_TIME_VALUES.includes(selected) || !selected
+    ? CSKH_TIME_VALUES
+    : [...CSKH_TIME_VALUES, selected].sort();
+  return `<option value="" disabled ${selected ? "" : "selected"}>Chọn giờ</option>`
+    + values.map(value => `<option value="${value}" ${value === selected ? "selected" : ""}>${value}</option>`).join("");
+};
+const dateTimeControlMarkup = ({ id, name, label, value, required = true }) => {
+  const parts = splitLocalDateTime(value);
+  return `
+    <div class="cskh-datetime-control" data-datetime-control="${escape(id)}">
+      <label>${escape(label)}</label>
+      <input type="hidden" id="${escape(id)}" name="${escape(name)}" value="${escape(value || "")}">
+      <div class="cskh-datetime-parts">
+        <input type="date" id="${escape(id)}Date" value="${escape(parts.date)}" ${required ? "required" : ""} aria-label="${escape(label)} - ngày">
+        <select id="${escape(id)}Time" ${required ? "required" : ""} aria-label="${escape(label)} - giờ 24h">${timeOptionsMarkup(parts.time)}</select>
+      </div>
+    </div>`;
+};
+const setDateTimeControlValue = (id, value = "") => {
+  const hidden = document.getElementById(id);
+  const date = document.getElementById(`${id}Date`);
+  const time = document.getElementById(`${id}Time`);
+  const parts = splitLocalDateTime(value);
+  if (hidden) hidden.value = value || "";
+  if (date) date.value = parts.date;
+  if (time) {
+    if (parts.time && ![...time.options].some(option => option.value === parts.time)) {
+      time.insertAdjacentHTML("beforeend", `<option value="${escape(parts.time)}">${escape(parts.time)}</option>`);
+    }
+    time.value = parts.time || "";
+  }
+  return hidden?.value || "";
+};
+const syncDateTimeControlValue = id => {
+  const hidden = document.getElementById(id);
+  const date = document.getElementById(`${id}Date`)?.value || "";
+  const time = document.getElementById(`${id}Time`)?.value || "";
+  if (hidden) hidden.value = date && time ? `${date}T${time}` : "";
+  return hidden?.value || "";
+};
+const bindDateTimeControl = (id, onChange) => {
+  const handle = () => {
+    syncDateTimeControlValue(id);
+    onChange?.(document.getElementById(id));
+  };
+  document.getElementById(`${id}Date`)?.addEventListener("change", handle);
+  document.getElementById(`${id}Time`)?.addEventListener("change", handle);
+};
+const nextHalfHourLocal = () => {
+  const step = 30 * 60 * 1000;
+  return window.UniteOps.toDatetimeLocal(new Date(Math.ceil(Date.now() / step) * step));
+};
+const cskhErrorMessages = {
+  ROOM_UNIT_CONFLICT:"Phòng vừa được booking khác giữ trong khung giờ này. Danh sách phòng đã được cập nhật; hãy chọn phòng hoặc giờ khác.",
+  ROOM_UNAVAILABLE:"Không còn phòng khả dụng cho layout và khung giờ này.",
+  BOOKING_STALE:"Đơn vừa được tài khoản khác cập nhật. Hãy tải lại dữ liệu rồi mở lại đơn.",
+  FORBIDDEN:"Tài khoản hiện tại không có quyền gán phòng.",
+  VALIDATION_ERROR:"Thông tin phòng hoặc thời gian chưa hợp lệ. Hãy kiểm tra lại."
+};
+const friendlyCskhError = error => cskhErrorMessages[error?.code]
+  || cskhErrorMessages[error?.error_code]
+  || error?.message
+  || String(error || "Có lỗi xảy ra.");
+const hcmTime = value => new Intl.DateTimeFormat("vi-VN", {
+  timeZone:"Asia/Ho_Chi_Minh", hour:"2-digit", minute:"2-digit", hourCycle:"h23"
+}).format(window.UniteOps.asDate(value));
+const busyUnitSuffix = conflicts => {
+  if (!conflicts.length) return "";
+  const first = conflicts[0];
+  const extra = conflicts.length > 1 ? ` +${conflicts.length - 1} đơn` : "";
+  return ` · Bận ${hcmTime(first.checkinAt)}–${hcmTime(first.checkoutAt)} · ${first.id || "Booking"} · ${first.customerName || "Khách"}${extra}`;
+};
+const renderBusyUnitLinks = (container, units, draft, ignoreId = null) => {
+  if (!container) return;
+  const rows = units.flatMap(unit => window.UniteOps.findConflicts(
+    cskhState.bookings,
+    { ...draft, roomUnitCode:unit.code },
+    ignoreId
+  ).map(conflict => ({ unit, conflict })));
+  container.hidden = rows.length === 0;
+  container.innerHTML = rows.length ? `
+    <b>Phòng đang bận trong khung giờ này</b>
+    ${rows.map(({ unit, conflict }) => `
+      <div class="busy-unit-row">
+        <span><strong>${escape(unit.unitName || unit.code)}</strong> · ${escape(hcmTime(conflict.checkinAt))}–${escape(hcmTime(conflict.checkoutAt))}<small>${escape(conflict.id || "Booking")} · ${escape(conflict.customerName || "Khách")}</small></span>
+        <button type="button" data-open-busy-booking="${escape(conflict.id)}">Mở đơn</button>
+      </div>`).join("")}` : "";
+  container.onclick = event => {
+    const trigger = event.target.closest("[data-open-busy-booking]");
+    if (trigger) window.openCreateBookingModal(trigger.dataset.openBusyBooking);
+  };
+};
 
 const cskhStatusLabel = status => window.UniteOps.statuses[status] || status;
 const cskhBranches = () => [...new Set(cskhState.rooms.map(room => room.location).filter(Boolean))];
@@ -325,15 +429,24 @@ const renderUnitOptions = () => {
   const draft = { ...draftFromForm(), roomId };
   const units = cskhUnits().filter(unit => unit.roomId === roomId);
   const old = form.roomUnitCode.value;
+  let busyList = $("#busyUnitList", form);
+  if (!busyList) {
+    busyList = document.createElement("div");
+    busyList.id = "busyUnitList";
+    busyList.className = "busy-unit-list";
+    busyList.hidden = true;
+    form.roomUnitCode.insertAdjacentElement("afterend", busyList);
+  }
 
-  form.roomUnitCode.innerHTML = units.map(unit => {
+  form.roomUnitCode.innerHTML = `<option value="">Chưa xếp phòng cụ thể</option>${units.map(unit => {
     const conflicts = window.UniteOps.findConflicts(cskhState.bookings, { ...draft, roomUnitCode: unit.code }, form.editingId.value);
     const unavailable = unit.status !== "available";
-    const label = `${unit.unitName} ${unavailable ? "· bảo trì" : conflicts.length ? "· bận giờ này" : "· trống"}`;
-    return `<option value="${unit.code}" ${unavailable ? "disabled" : ""} ${conflicts.length ? "data-busy='1'" : ""}>${escape(label)}</option>`;
-  }).join("");
+    const label = `${unit.unitName}${unavailable ? " · Bảo trì/đã ẩn" : conflicts.length ? busyUnitSuffix(conflicts) : " · Trống"}`;
+    return `<option value="${unit.code}" ${unavailable || conflicts.length ? "disabled" : ""}>${escape(label)}</option>`;
+  }).join("")}`;
 
-  if (units.some(unit => unit.code === old)) form.roomUnitCode.value = old;
+  if ([...form.roomUnitCode.options].some(option => option.value === old && !option.disabled)) form.roomUnitCode.value = old;
+  renderBusyUnitLinks(busyList, units, draft, form.editingId.value);
   renderConflictWarning();
 };
 
@@ -466,6 +579,44 @@ const weekDays = () => {
   });
 };
 
+const CALENDAR_BOOKING_COLORS = [
+  { bg:"#e8f1ff", border:"#6b91d8", text:"#173b72" },
+  { bg:"#e7f7ed", border:"#55a879", text:"#175c38" },
+  { bg:"#fff0df", border:"#d78a43", text:"#74400e" },
+  { bg:"#f2eaff", border:"#9270ca", text:"#4d2a83" },
+  { bg:"#ffe9ef", border:"#d66f8b", text:"#7c2842" },
+  { bg:"#e4f7f5", border:"#4fa69e", text:"#145d58" },
+  { bg:"#fff8d9", border:"#c4a33c", text:"#66520b" },
+  { bg:"#e9edff", border:"#7483d7", text:"#303d83" },
+  { bg:"#f8e9df", border:"#bd7954", text:"#6e351a" },
+  { bg:"#e9f5df", border:"#75a651", text:"#355f18" },
+  { bg:"#fce8ff", border:"#b66cc1", text:"#6c2875" },
+  { bg:"#e3f2fb", border:"#5998bd", text:"#1c5577" }
+];
+const stringHash = value => [...String(value || "")].reduce((hash, character) => ((hash * 31) + character.charCodeAt(0)) >>> 0, 2166136261);
+const bookingKey = booking => booking.supabaseId || booking.id;
+const calendarColorMap = bookings => {
+  const map = new Map();
+  const used = new Set();
+  [...bookings].sort((left, right) => String(bookingKey(left)).localeCompare(String(bookingKey(right)))).forEach((booking, index) => {
+    const key = bookingKey(booking);
+    let paletteIndex = stringHash(key) % CALENDAR_BOOKING_COLORS.length;
+    while (used.has(paletteIndex) && used.size < CALENDAR_BOOKING_COLORS.length) {
+      paletteIndex = (paletteIndex + 1) % CALENDAR_BOOKING_COLORS.length;
+    }
+    if (used.size < CALENDAR_BOOKING_COLORS.length) used.add(paletteIndex);
+    const color = index < CALENDAR_BOOKING_COLORS.length
+      ? CALENDAR_BOOKING_COLORS[paletteIndex]
+      : {
+          bg:`hsl(${(index * 137.508) % 360} 72% 93%)`,
+          border:`hsl(${(index * 137.508) % 360} 45% 52%)`,
+          text:`hsl(${(index * 137.508) % 360} 58% 25%)`
+        };
+    map.set(key, color);
+  });
+  return map;
+};
+
 const renderCalendar = () => {
   const days = weekDays();
   const branch = cskhState.calendarBranch;
@@ -497,15 +648,29 @@ const renderCalendar = () => {
   ).values()];
   const calendarUnits = [...units, ...historicalUnits];
   const timeText = value => new Intl.DateTimeFormat("vi-VN", {
-    timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit"
+    timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", hourCycle:"h23"
   }).format(window.UniteOps.asDate(value));
+  const bookingsForDay = (rows, day) => {
+    const dayKey = window.UniteOps.isoDate(day);
+    const dayStart = `${dayKey}T00:00`;
+    const dayEnd = window.UniteOps.addHoursLocal(dayStart, 24);
+    return rows.filter(booking => window.UniteOps.rangesOverlap(booking.checkinAt, booking.checkoutAt, dayStart, dayEnd));
+  };
+  const weekBookings = visibleBookings.filter(booking => days.some(day => bookingsForDay([booking], day).length));
+  const colors = calendarColorMap(weekBookings);
+  const anomalyMap = window.UniteOps.findUnitOverlapAnomalies?.(weekBookings) || new Map();
   const bookingMarkup = booking => {
     const kind = window.UniteOps.activeStatuses.includes(booking.status) && booking.roomUnitCode
       ? "busy"
       : booking.status === "checked_out" && booking.roomUnitCode ? "history" : "pending";
-    return `<button type="button" class="calendar-booking ${kind}" data-calendar-edit="${escape(booking.id)}">
+    const anomaly = anomalyMap.has(bookingKey(booking));
+    const color = colors.get(bookingKey(booking)) || CALENDAR_BOOKING_COLORS[0];
+    const style = `--booking-bg:${color.bg};--booking-border:${color.border};--booking-text:${color.text}`;
+    return `<button type="button" class="calendar-booking ${kind}${anomaly ? " calendar-conflict" : ""}" style="${style}" data-calendar-edit="${escape(booking.id)}">
       ${escape(booking.customerName)} · ${escape(booking.phone)}
-      <small>${timeText(booking.checkinAt)} → ${timeText(booking.checkoutAt)}<br>${escape(cskhStatusLabel(booking.status))} · ${window.UniteOps.money(booking.total)}</small>
+      <small>${timeText(booking.checkinAt)} → ${timeText(booking.checkoutAt)}</small>
+      <span class="calendar-status-badge">${escape(cskhStatusLabel(booking.status))}</span>
+      ${anomaly ? `<span class="calendar-conflict-badge">Xung đột dữ liệu</span>` : ""}
     </button>`;
   };
   const cellMarkup = bookings => {
@@ -513,30 +678,42 @@ const renderCalendar = () => {
       ? "busy"
       : bookings.some(booking => ["new", "consulting"].includes(booking.status) || !booking.roomUnitCode)
         ? "pending" : bookings.length ? "history" : "free";
-    return `<div class="calendar-cell ${cellKind}">${bookings.map(bookingMarkup).join("") || `<small>Trống</small>`}</div>`;
+    const anomaly = bookings.some(booking => anomalyMap.has(bookingKey(booking)));
+    return `<div class="calendar-cell ${cellKind}${anomaly ? " conflict" : ""}">${bookings.map(bookingMarkup).join("") || `<small>Trống</small>`}</div>`;
   };
-  const bookingsForDay = (rows, day) => {
-    const dayKey = window.UniteOps.isoDate(day);
-    const dayStart = `${dayKey}T00:00`;
-    const dayEnd = window.UniteOps.addHoursLocal(dayStart, 24);
-    return rows.filter(booking => window.UniteOps.rangesOverlap(booking.checkinAt, booking.checkoutAt, dayStart, dayEnd));
-  };
-  const head = `<div class="calendar-head"><div>Phòng</div>${days.map(day => `<div>${day.toLocaleDateString("vi-VN", { weekday: "short", day: "2-digit", month: "2-digit" })}</div>`).join("")}</div>`;
+  const head = `<div class="calendar-desktop calendar-head"><div>Phòng</div>${days.map(day => `<div>${day.toLocaleDateString("vi-VN", { weekday: "short", day: "2-digit", month: "2-digit" })}</div>`).join("")}</div>`;
   const unitRows = calendarUnits.map(unit => {
     const unitBookings = visibleBookings.filter(booking => booking.roomUnitCode === unit.code);
-    return `<div class="calendar-row${unit.historical ? " calendar-history-row" : ""}"><div class="calendar-room">${escape(unit.roomName)}<small>${escape(unit.branch)} · ${escape(unit.unitName)}${unit.historical ? " · phòng lịch sử/đã ẩn" : ""}</small></div>${days.map(day => cellMarkup(bookingsForDay(unitBookings, day))).join("")}</div>`;
+    return `<div class="calendar-desktop calendar-row${unit.historical ? " calendar-history-row" : ""}"><div class="calendar-room">${escape(unit.roomName)}<small>${escape(unit.branch)} · ${escape(unit.unitName)}${unit.historical ? " · phòng lịch sử/đã ẩn" : ""}</small></div>${days.map(day => cellMarkup(bookingsForDay(unitBookings, day))).join("")}</div>`;
   }).join("");
   const unassigned = visibleBookings.filter(booking => !booking.roomUnitCode);
   const hasUnassignedInWeek = days.some(day => bookingsForDay(unassigned, day).length);
   const unassignedRow = hasUnassignedInWeek
-    ? `<div class="calendar-row calendar-unassigned-row"><div class="calendar-room">Cần xếp phòng<small>Đơn cũ/chưa hoàn tất · mở đơn và bấm Tự xếp phòng</small></div>${days.map(day => cellMarkup(bookingsForDay(unassigned, day))).join("")}</div>`
+    ? `<div class="calendar-desktop calendar-row calendar-unassigned-row"><div class="calendar-room">Cần xếp phòng<small>Đơn mềm chưa giữ tồn kho · mở đơn để gán phòng</small></div>${days.map(day => cellMarkup(bookingsForDay(unassigned, day))).join("")}</div>`
     : "";
-  const weekBookings = visibleBookings.filter(booking => days.some(day => bookingsForDay([booking], day).length));
   const pendingCount = weekBookings.filter(booking => ["new", "consulting"].includes(booking.status)).length;
   const unassignedCount = weekBookings.filter(booking => !booking.roomUnitCode).length;
   const historicalCount = weekBookings.filter(booking => booking.roomUnitCode && !knownUnitCodes.has(booking.roomUnitCode)).length;
-  const summary = `<div class="calendar-summary"><b>${weekBookings.length} lịch trong tuần</b><span><i class="pending"></i>${pendingCount} chờ xử lý</span><span><i class="unassigned"></i>${unassignedCount} chưa xếp phòng</span>${historicalCount ? `<span>⚠ ${historicalCount} lịch ở phòng lịch sử/đã ẩn</span>` : ""}<span><i class="busy"></i>Đỏ đậm = đang giữ/bận</span></div>`;
-  mount.innerHTML = summary + head + unassignedRow + unitRows;
+  const anomalyCount = [...anomalyMap.keys()].length;
+  const summary = `<div class="calendar-summary"><b>${weekBookings.length} lịch trong tuần</b><span><i class="pending"></i>${pendingCount} chờ xử lý</span><span><i class="unassigned"></i>${unassignedCount} chưa xếp phòng</span>${historicalCount ? `<span>⚠ ${historicalCount} lịch ở phòng lịch sử/đã ẩn</span>` : ""}${anomalyCount ? `<span class="calendar-anomaly-count">⚠ ${anomalyCount} đơn xung đột dữ liệu</span>` : ""}</div>`;
+
+  cskhState.calendarDayIndex = Math.min(6, Math.max(0, Number(cskhState.calendarDayIndex || 0)));
+  const selectedDay = days[cskhState.calendarDayIndex];
+  const mobileOverview = `<div class="calendar-mobile-overview" aria-label="Tổng quan bảy ngày">${days.map((day, index) => {
+    const rows = bookingsForDay(weekBookings, day);
+    return `<button type="button" data-calendar-day="${index}" class="${index === cskhState.calendarDayIndex ? "active" : ""}" aria-pressed="${index === cskhState.calendarDayIndex}">
+      <b>${day.toLocaleDateString("vi-VN", { weekday:"short" })}</b><small>${day.toLocaleDateString("vi-VN", { day:"2-digit", month:"2-digit" })}</small><span>${rows.length}</span>
+    </button>`;
+  }).join("")}</div>`;
+  const mobileUnitRows = [
+    ...(bookingsForDay(unassigned, selectedDay).length ? [{ code:"", roomName:"Cần xếp phòng", branch:"", unitName:"Chưa giữ tồn kho", unassigned:true }] : []),
+    ...calendarUnits
+  ].map(unit => {
+    const rows = bookingsForDay(unit.unassigned ? unassigned : visibleBookings.filter(booking => booking.roomUnitCode === unit.code), selectedDay);
+    return `<div class="calendar-mobile-room${unit.unassigned ? " unassigned" : ""}"><div><b>${escape(unit.roomName)}</b><small>${escape([unit.branch, unit.unitName].filter(Boolean).join(" · "))}</small></div><div>${rows.map(bookingMarkup).join("") || `<span class="calendar-mobile-free">Trống</span>`}</div></div>`;
+  }).join("");
+  const mobileDetail = `<section class="calendar-mobile-detail"><h3>${selectedDay.toLocaleDateString("vi-VN", { weekday:"long", day:"2-digit", month:"2-digit", year:"numeric" })}</h3>${mobileUnitRows || `<p>Chưa có phòng trong chi nhánh này.</p>`}</section>`;
+  mount.innerHTML = summary + mobileOverview + mobileDetail + head + unassignedRow + unitRows;
 };
 
 const showCalendarWeekForCheckin = checkinAt => {
@@ -737,7 +914,9 @@ const autoAssignQuickPayBooking = async (booking, { claimForPayment = false } = 
       const migrationHint = /auto_assign_booking_room_unit|schema cache|function/i.test(result.message || "")
         ? " Cần chạy migration V15.4.2 trên Supabase rồi thử lại."
         : "";
-      throw new Error(`${result.message || "Không tự xếp được phòng."}${migrationHint}`);
+      const assignmentError = new Error(`${result.message || "Không tự xếp được phòng."}${migrationHint}`);
+      assignmentError.code = result.code;
+      throw assignmentError;
     }
     return mergeQuickPayBooking(result.row);
   }
@@ -949,7 +1128,7 @@ const autoAssignBookingFromList = async (bookingId, button) => {
     const assigned = await autoAssignQuickPayBooking(fresh);
     showCskhToast(`Đã xếp ${assigned.roomUnitName || assigned.roomUnitCode}. Lịch đã chuyển vào đúng hàng phòng.`);
   } catch (error) {
-    alert(`Lỗi: ${error.message || error}`);
+    showCskhToast(friendlyCskhError(error), "error");
     if (button) {
       button.disabled = false;
       button.textContent = originalText;
@@ -1295,14 +1474,12 @@ const openQuickPayModal = (bookingId) => {
     } else if (mode === 'date') {
       area.innerHTML = `
         <form id="qpForm" onsubmit="window.qpChangeDate(event)">
-          <div style="display:flex;gap:10px;margin-bottom:10px;">
+          <div class="create-booking-row" style="margin-bottom:10px;">
             <div style="flex:1;">
-              <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Check-in mới</label>
-              <input type="datetime-local" id="qpCheckin" name="checkin" value="${window.UniteOps.toDatetimeLocal(booking.checkinAt)}" required onchange="window.qpHandleCheckinChange(this)" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;">
+              ${dateTimeControlMarkup({ id:"qpCheckin", name:"checkin", label:"Check-in mới", value:window.UniteOps.toDatetimeLocal(booking.checkinAt) })}
             </div>
             <div style="flex:1;">
-              <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Check-out mới</label>
-              <input type="datetime-local" id="qpCheckout" name="checkout" value="${window.UniteOps.toDatetimeLocal(booking.checkoutAt)}" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;">
+              ${dateTimeControlMarkup({ id:"qpCheckout", name:"checkout", label:"Check-out mới", value:window.UniteOps.toDatetimeLocal(booking.checkoutAt) })}
             </div>
           </div>
           <button type="submit" id="qpSaveBtn" style="width:100%;background:#000;color:#fff;border:none;border-radius:8px;padding:12px;font-weight:600;cursor:pointer;">Kiểm tra & Đổi ngày</button>
@@ -1316,13 +1493,15 @@ const openQuickPayModal = (bookingId) => {
       window.qpHandleCheckinChange = (input) => {
          if (!window._qpOrigDuration) return;
          const outInput = document.getElementById('qpCheckout');
-         if (input.value && outInput) {
-            const newIn = window.UniteOps.asDate(input.value).getTime();
-            if (!isNaN(newIn)) {
-                outInput.value = window.UniteOps.toDatetimeLocal(new Date(newIn + window._qpOrigDuration));
-            }
-         }
-      };
+          if (input.value && outInput) {
+             const newIn = window.UniteOps.asDate(input.value).getTime();
+             if (!isNaN(newIn)) {
+                setDateTimeControlValue("qpCheckout", window.UniteOps.toDatetimeLocal(new Date(newIn + window._qpOrigDuration)));
+             }
+          }
+       };
+      bindDateTimeControl("qpCheckin", input => window.qpHandleCheckinChange(input));
+      bindDateTimeControl("qpCheckout");
     } else if (mode === 'cancel') {
       area.innerHTML = `
         <div style="background:#ffebee;padding:12px;border-radius:8px;border:1px solid #ffcdd2;margin-bottom:10px;">
@@ -1346,6 +1525,8 @@ const openQuickPayModal = (bookingId) => {
     btn.disabled = true;
     btn.textContent = 'Đang kiểm tra...';
     try {
+      syncDateTimeControlValue("qpCheckin");
+      syncDateTimeControlValue("qpCheckout");
       const inAt = e.target.checkin.value;
       const outAt = e.target.checkout.value;
       const start = window.UniteOps.asDate(inAt);
@@ -1643,8 +1824,9 @@ window.openCreateBookingModal = (bookingId = null) => {
   document.getElementById('createBookingModal')?.remove();
   document.getElementById('createBookingBackdrop')?.remove();
 
-  const booking = bookingId ? cskhState.bookings.find(b => b.id === bookingId) : null;
-  const isEdit = !!booking;
+  let booking = bookingId ? cskhState.bookings.find(b => b.id === bookingId) : null;
+  let isEdit = !!booking;
+  const openedForNewBooking = !booking;
   if (booking?.checkinAt) showCalendarWeekForCheckin(booking.checkinAt);
 
   const sourceOpts = window.UniteOps.sources?.map(s => `<option value="${s}" ${booking?.source === s ? 'selected' : ''}>${s}</option>`).join('') || '';
@@ -1667,7 +1849,7 @@ window.openCreateBookingModal = (bookingId = null) => {
     return `<option value="${escape(branch)}" ${branch === selectedBranch ? 'selected' : ''}>${escape(branch)}${historical ? ' · lịch sử' : ''}</option>`;
   }).join('');
 
-  let defaultIn = window.UniteOps.toDatetimeLocal(new Date());
+  let defaultIn = nextHalfHourLocal();
   let defaultOut = window.UniteOps.addHoursLocal(defaultIn, 3);
   if (isEdit) {
     defaultIn = window.UniteOps.toDatetimeLocal(booking.checkinAt);
@@ -1729,6 +1911,7 @@ window.openCreateBookingModal = (bookingId = null) => {
             <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Phòng cụ thể (có thể xếp sau)</label>
             <select name="roomUnitCode" id="cbUnit" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;"></select>
             <small id="cbUnitHint" style="display:block;margin-top:5px;color:#777;line-height:1.4;">Có thể nhận cọc hoặc thanh toán trước; cần xếp phòng cụ thể trước khi khách check-in.</small>
+            <div id="cbBusyUnits" class="busy-unit-list" hidden></div>
           </div>
 
           <div class="create-booking-row">
@@ -1744,12 +1927,10 @@ window.openCreateBookingModal = (bookingId = null) => {
 
           <div class="create-booking-row">
             <div style="flex:1;">
-              <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Check-in *</label>
-              <input type="datetime-local" name="checkin" id="cbCheckin" value="${defaultIn}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;">
+              ${dateTimeControlMarkup({ id:"cbCheckin", name:"checkin", label:"Check-in *", value:defaultIn })}
             </div>
             <div style="flex:1;">
-              <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Check-out *</label>
-              <input type="datetime-local" name="checkout" id="cbCheckout" value="${defaultOut}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;">
+              ${dateTimeControlMarkup({ id:"cbCheckout", name:"checkout", label:"Check-out *", value:defaultOut })}
             </div>
           </div>
           <p id="cbTimeHint" style="margin:8px 0 0;font-size:12px;color:#666;line-height:1.45;"></p>
@@ -1760,6 +1941,7 @@ window.openCreateBookingModal = (bookingId = null) => {
            <textarea name="note" placeholder="Setup, giờ khách muốn nhận, yêu cầu đặc biệt..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;min-height:60px;">${escape(booking?.note || '')}</textarea>
         </div>
 
+        <div id="cbError" class="cskh-modal-error" role="alert" aria-live="assertive"></div>
         <button type="submit" id="cbSaveBtn" style="width:100%;background:#000;color:#fff;border:none;border-radius:8px;padding:14px;font-size:15px;font-weight:600;cursor:pointer;margin-top:8px;">${isEdit ? 'Lưu Cập Nhật' : 'Tạo Đơn (Trạng thái: Mới)'}</button>
       </form>
     </div>
@@ -1775,6 +1957,7 @@ window.openCreateBookingModal = (bookingId = null) => {
   const packageSel = document.getElementById('cbPackage');
   const timeHint = document.getElementById('cbTimeHint');
   const unitHint = document.getElementById('cbUnitHint');
+  const busyUnitList = document.getElementById('cbBusyUnits');
   const saveBtn = document.getElementById('cbSaveBtn');
 
   const updateTimeHint = () => {
@@ -1813,13 +1996,11 @@ window.openCreateBookingModal = (bookingId = null) => {
       const conflicts = window.UniteOps.findConflicts(cskhState.bookings, { ...draft, roomUnitCode: unit.code }, booking?.id || null);
       const unavailable = unit.status !== 'available';
       const isOriginal = isEdit && roomId === booking?.roomId && unit.code === booking?.roomUnitCode;
-      const disabled = !isOriginal && (unavailable || conflicts.length > 0);
-      const suffix = isOriginal && unavailable
-        ? ' · đang giữ theo lịch sử (bảo trì)'
-        : isOriginal && conflicts.length
-          ? ' · đang gán, có xung đột cần rà soát'
-          : unavailable ? ' · bảo trì' : conflicts.length ? ' · bận khung giờ này' : ' · trống';
-      return `<option value="${escape(unit.code)}" ${disabled ? 'disabled' : ''}>${escape(unit.unitName || unit.code)}${suffix}</option>`;
+      const disabled = unavailable || conflicts.length > 0;
+      const suffix = unavailable
+        ? isOriginal ? ' · Phòng hiện bảo trì/đã ẩn — phải đổi phòng' : ' · Bảo trì/đã ẩn'
+        : conflicts.length ? busyUnitSuffix(conflicts) : ' · Trống';
+      return `<option value="${escape(unit.code)}" ${disabled ? 'disabled' : ''}>${escape(unit.unitName || unit.code)}${escape(suffix)}</option>`;
     });
     const originalMissing = isEdit
       && roomId === booking?.roomId
@@ -1834,7 +2015,10 @@ window.openCreateBookingModal = (bookingId = null) => {
     if ([...unitSel.options].some(option => option.value === previous && !option.disabled)) {
       unitSel.value = previous;
     }
-    const busyCount = [...unitSel.options].filter(option => option.disabled).length;
+    const busyCount = units.filter(unit => {
+      if (unit.status !== "available") return true;
+      return window.UniteOps.findConflicts(cskhState.bookings, { ...draft, roomUnitCode:unit.code }, booking?.id || null).length > 0;
+    }).length;
     const capacity = window.UniteOps.roomCapacityState(
       cskhState.bookings,
       { ...draft, status: booking?.status || 'holding' },
@@ -1842,14 +2026,15 @@ window.openCreateBookingModal = (bookingId = null) => {
       booking?.id || null
     );
     unitHint.textContent = units.length
-      ? `${Math.max(0, units.length - busyCount)} phòng cụ thể đang trống · ${capacity.reserved} booking đã giữ/cọc/thu · còn ${capacity.remainingBeforeDraft} suất. Có thể nhận cọc trước; cần xếp phòng trước check-in.`
+      ? `${Math.max(0, units.length - busyCount)} phòng đang trống · ${capacity.reserved} booking đang chiếm tồn kho. Phòng bận bị khóa; chọn phòng sẽ chuyển đơn Mới/Đang tư vấn sang Giữ phòng.`
       : 'Layout này chưa có phòng thực tế khả dụng trong inventory.';
+    renderBusyUnitLinks(busyUnitList, units, draft, booking?.id || null);
     if (saveBtn) {
       const selected = unitSel.options[unitSel.selectedIndex]?.textContent?.replace(/\s+·\s+(trống|bận khung giờ này|bảo trì)$/i, '') || '';
       saveBtn.textContent = unitSel.value
-        ? `Lưu & gán ${selected}`
+        ? `Lưu & giữ ${selected}`
         : Number(booking?.paid || booking?.deposit || 0) > 0
-          ? 'Lưu thông tin · vẫn chờ xếp phòng'
+          ? 'Cần tự xếp phòng trước khi lưu thanh toán'
           : isEdit ? 'Lưu & để chờ xếp phòng' : 'Tạo đơn & để chờ xếp phòng';
     }
   };
@@ -1882,8 +2067,31 @@ window.openCreateBookingModal = (bookingId = null) => {
     updateUnits();
   };
 
+  let availabilityRequest = 0;
+  let availabilityTimer = 0;
+  const refreshLiveAvailability = async () => {
+    if (!quickPayUsesLiveData()) return;
+    const request = ++availabilityRequest;
+    const result = await window.UniteOps.loadBookingsAsync();
+    if (request !== availabilityRequest || !result.ok || !document.getElementById("createBookingModal")) return;
+    cskhState.bookings = result.rows;
+    saveLocal();
+    if (booking) {
+      const fresh = result.rows.find(row => row.id === booking.id || (booking.supabaseId && row.supabaseId === booking.supabaseId));
+      if (fresh) booking = fresh;
+    }
+    renderBookings();
+    renderCalendar();
+    updateUnits();
+  };
+  const queueLiveAvailabilityRefresh = () => {
+    window.clearTimeout(availabilityTimer);
+    availabilityTimer = window.setTimeout(() => refreshLiveAvailability().catch(() => {}), 250);
+  };
+
   branchSel.addEventListener('change', updateRooms);
-  roomSel.addEventListener('change', updateUnits);
+  branchSel.addEventListener('change', queueLiveAvailabilityRefresh);
+  roomSel.addEventListener('change', () => { updateUnits(); queueLiveAvailabilityRefresh(); });
   unitSel.addEventListener('change', updateUnits);
   updateRooms();
 
@@ -1898,31 +2106,41 @@ window.openCreateBookingModal = (bookingId = null) => {
     const hours = keepsOriginalStay
       ? originalDurationMs / 3_600_000
       : Number(selectedPrice?.durationHours || 0) || window.UniteOps.packageHours(packageSel.value);
-    checkoutInput.value = window.UniteOps.addHoursLocal(checkinInput.value, hours);
+    setDateTimeControlValue("cbCheckout", window.UniteOps.addHoursLocal(checkinInput.value, hours));
     updateTimeHint();
     updateUnits();
   };
 
-  checkinInput.addEventListener('change', () => {
+  bindDateTimeControl("cbCheckin", () => {
     delete checkinInput.dataset.quickPasteTimeMissing;
     delete checkinInput.dataset.quickPasteDate;
     checkinInput.setCustomValidity('');
     updateCheckout({ preserveDuration: true });
+    queueLiveAvailabilityRefresh();
   });
-  packageSel.addEventListener('change', () => updateCheckout());
-  checkoutInput.addEventListener('change', () => { updateTimeHint(); updateUnits(); });
+  packageSel.addEventListener('change', () => { updateCheckout(); queueLiveAvailabilityRefresh(); });
+  bindDateTimeControl("cbCheckout", () => { updateTimeHint(); updateUnits(); queueLiveAvailabilityRefresh(); });
   updateTimeHint();
   updateUnits();
+  queueLiveAvailabilityRefresh();
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = document.getElementById('cbSaveBtn');
+    const errorBox = document.getElementById('cbError');
+    if (errorBox) {
+      errorBox.textContent = '';
+      errorBox.classList.remove('show');
+    }
     btn.disabled = true;
     btn.textContent = 'Đang lưu...';
     try {
+      syncDateTimeControlValue("cbCheckin");
+      syncDateTimeControlValue("cbCheckout");
       const inAt = form.checkin.value;
       const outAt = form.checkout.value;
       if (!updateTimeHint()) throw new Error('Check-out phải sau check-in.');
+      await refreshLiveAvailability();
       const selRoom = cskhState.rooms.find(r => r.id === roomSel.value);
       const selUnit = cskhUnits().find(unit => unit.code === unitSel.value) || {};
       const payload = {
@@ -1951,24 +2169,112 @@ window.openCreateBookingModal = (bookingId = null) => {
         createdAt: booking?.createdAt || new Date().toISOString(),
         assignedTo: booking?.assignedTo || window.UniteAuth?.profile?.()?.full_name || 'CSKH'
       };
-      const conflicts = window.UniteOps.activeStatuses.includes(payload.status) && payload.roomUnitCode
+      const conflicts = payload.roomUnitCode
         ? window.UniteOps.findConflicts(cskhState.bookings, payload, booking?.id || null)
         : [];
       if (conflicts.length) {
-        throw new Error(`Phòng đã bận: ${conflicts.map(row => `${row.customerName} (${window.UniteOps.dateTime(row.checkinAt)})`).join(', ')}`);
+        const conflictError = new Error(`Phòng đã bận: ${conflicts.map(row => `${row.id} · ${row.customerName} · ${hcmTime(row.checkinAt)}–${hcmTime(row.checkoutAt)}`).join(', ')}`);
+        conflictError.code = "ROOM_UNIT_CONFLICT";
+        throw conflictError;
       }
-      const saved = await saveBooking(
-        payload,
-        isEdit ? { expectedUpdatedAt:booking.updatedAt } : {}
+      const live = quickPayUsesLiveData();
+      const wantsUnit = Boolean(payload.roomUnitCode);
+      if (live && wantsUnit && (!selRoom?.supabaseId || !selUnit?.id)) {
+        const inventoryError = new Error("Inventory live chưa trả về UUID của layout/phòng. Hãy tải lại Supabase trước khi gán.");
+        inventoryError.code = "ROOM_UNAVAILABLE";
+        throw inventoryError;
+      }
+
+      let saved;
+      let createdLead = false;
+      if (!booking) {
+        // A lead is created without a physical unit. Selecting a unit is a
+        // separate atomic assignment that promotes it to `holding`.
+        saved = await saveBooking({
+          ...payload,
+          status:"new",
+          roomUnitCode:"",
+          roomUnitName:""
+        });
+        booking = saved;
+        isEdit = true;
+        createdLead = true;
+      }
+
+      const sameMoment = (left, right) => window.UniteOps.asDate(left).getTime() === window.UniteOps.asDate(right).getTime();
+      const assignmentChanged = wantsUnit && (
+        !booking.roomUnitCode
+        || booking.roomUnitCode !== payload.roomUnitCode
+        || booking.roomId !== payload.roomId
+        || !sameMoment(booking.checkinAt, payload.checkinAt)
+        || !sameMoment(booking.checkoutAt, payload.checkoutAt)
+        || (window.UniteOps.softStatuses || ["new", "consulting"]).includes(booking.status)
       );
+
+      if (assignmentChanged && live) {
+        const assignment = await window.UniteOps.assignRoomUnitV2Async({
+          ...booking,
+          roomId:payload.roomId,
+          roomName:payload.roomName,
+          checkinAt:payload.checkinAt,
+          checkoutAt:payload.checkoutAt
+        }, {
+          roomTypeId:selRoom.supabaseId,
+          roomUnitId:selUnit.id
+        });
+        if (!assignment.ok) {
+          const assignmentError = new Error(assignment.message || cskhErrorMessages[assignment.code]);
+          assignmentError.code = assignment.code;
+          throw assignmentError;
+        }
+        booking = mergeQuickPayBooking(assignment.row);
+        saved = await saveBooking({
+          ...payload,
+          ...assignment.row,
+          customerName:payload.customerName,
+          phone:payload.phone,
+          email:payload.email,
+          source:payload.source,
+          branch:payload.branch,
+          roomId:payload.roomId,
+          roomName:payload.roomName,
+          packageLabel:payload.packageLabel,
+          guests:payload.guests,
+          note:payload.note,
+          assignedTo:payload.assignedTo
+        }, { expectedUpdatedAt:assignment.row.updatedAt });
+      } else if (assignmentChanged) {
+        saved = await saveBooking({ ...payload, status:"holding" });
+      } else {
+        if (window.UniteOps.unitRequiredStatuses?.includes(payload.status) && !payload.roomUnitCode) {
+          const unitError = new Error("Trạng thái hiện tại bắt buộc có phòng cụ thể. Hãy chọn một phòng đang Trống.");
+          unitError.code = "VALIDATION_ERROR";
+          throw unitError;
+        }
+        const normalizedPayload = (window.UniteOps.softStatuses || ["new", "consulting"]).includes(payload.status)
+          ? { ...payload, roomUnitCode:"", roomUnitName:"" }
+          : payload;
+        saved = createdLead
+          ? booking
+          : await saveBooking(normalizedPayload, { expectedUpdatedAt:booking.updatedAt });
+      }
+
+      booking = saved;
       showCalendarWeekForCheckin(saved.checkinAt);
       document.getElementById('createBookingModal')?.remove();
       document.getElementById('createBookingBackdrop')?.remove();
-      if (!isEdit) setTimeout(() => window.openQuickPayModal(saved.id), 200);
+      if (openedForNewBooking) setTimeout(() => window.openQuickPayModal(saved.id), 200);
     } catch(err) {
-      alert('Lỗi: ' + (err.message || err));
+      const message = friendlyCskhError(err);
+      if (errorBox) {
+        errorBox.textContent = message;
+        errorBox.classList.add('show');
+        errorBox.scrollIntoView({ behavior:"smooth", block:"nearest" });
+      }
+      showCskhToast(message, "error");
       btn.disabled = false;
       updateUnits();
+      refreshLiveAvailability().catch(() => {});
     }
   });
 };
@@ -2033,7 +2339,9 @@ const saveBooking = async (booking, options = {}) => {
     : await window.UniteOps.createBookingAsync(booking);
   if (liveExpectedAtStart && !result.ok) {
     syncState("#cskhSupabaseSyncState", `Không lưu được Supabase: ${result.message || result.reason || "lỗi không xác định"}`);
-    throw new Error(`Booking chưa được lưu. ${result.message || result.reason || "Supabase từ chối yêu cầu."}`);
+    const saveError = new Error(`Booking chưa được lưu. ${result.message || result.reason || "Supabase từ chối yêu cầu."}`);
+    saveError.code = result.code;
+    throw saveError;
   }
 
   const saved = result.row || booking;
@@ -2187,7 +2495,7 @@ const advanceStatus = async id => {
   const nextStatus = statusOrder[currentIndex + 1];
 
   if (window.UniteOps.unitRequiredStatuses?.includes(nextStatus) && !booking.roomUnitCode) {
-    alert("Cần xếp phòng cụ thể trước khi check-in.");
+    alert("Trạng thái kế tiếp sẽ giữ tồn kho. Hãy chọn một phòng cụ thể đang Trống trước.");
     return window.openCreateBookingModal(booking.id);
   }
   if (nextStatus === "deposited" && (!hasDepositProof(booking) || Number(booking.deposit || 0) <= 0)) {
@@ -2560,6 +2868,9 @@ const openRequestedBooking = () => {
 const bind = async () => {
   const week = window.UniteOps.startOfWeek(new Date());
   cskhState.weekStart = week;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  cskhState.calendarDayIndex = Math.min(6, Math.max(0, Math.floor((todayStart.getTime() - week.getTime()) / 86_400_000)));
   const statusFromQuery = requestedStatusFilter();
   if (statusFromQuery) cskhState.status = statusFromQuery;
   $("#weekStart").value = window.UniteOps.isoDate(week);
@@ -2576,12 +2887,18 @@ const bind = async () => {
   $("#cskhSourceFilter").addEventListener("change", event => { cskhState.source = event.target.value; renderBookings(); });
   $("#calendarBranch").addEventListener("change", event => { cskhState.calendarBranch = event.target.value; renderCalendar(); });
   $("#bookingCalendar").addEventListener("click", event => {
+    const dayTrigger = event.target.closest("[data-calendar-day]");
+    if (dayTrigger) {
+      cskhState.calendarDayIndex = Number(dayTrigger.dataset.calendarDay || 0);
+      renderCalendar();
+      return;
+    }
     const trigger = event.target.closest("[data-calendar-edit]");
     if (trigger) window.openCreateBookingModal(trigger.dataset.calendarEdit);
   });
-  $("#weekStart").addEventListener("change", event => { cskhState.weekStart = new Date(`${event.target.value}T00:00:00`); renderCalendar(); });
-  $("#calendarPrev").addEventListener("click", () => { cskhState.weekStart.setDate(cskhState.weekStart.getDate() - 7); $("#weekStart").value = window.UniteOps.isoDate(cskhState.weekStart); renderCalendar(); });
-  $("#calendarNext").addEventListener("click", () => { cskhState.weekStart.setDate(cskhState.weekStart.getDate() + 7); $("#weekStart").value = window.UniteOps.isoDate(cskhState.weekStart); renderCalendar(); });
+  $("#weekStart").addEventListener("change", event => { cskhState.weekStart = new Date(`${event.target.value}T00:00:00`); cskhState.calendarDayIndex = 0; renderCalendar(); });
+  $("#calendarPrev").addEventListener("click", () => { cskhState.weekStart.setDate(cskhState.weekStart.getDate() - 7); cskhState.calendarDayIndex = 0; $("#weekStart").value = window.UniteOps.isoDate(cskhState.weekStart); renderCalendar(); });
+  $("#calendarNext").addEventListener("click", () => { cskhState.weekStart.setDate(cskhState.weekStart.getDate() + 7); cskhState.calendarDayIndex = 0; $("#weekStart").value = window.UniteOps.isoDate(cskhState.weekStart); renderCalendar(); });
   $("#cskhExport").addEventListener("click", () => window.UniteOps.downloadCsv(filteredBookings(), "Unite-Backup-Booking.csv"));
   $("#cskhReload").addEventListener("click", loadLiveBookings);
   $("#cskhImportFile").addEventListener("change", event => {
@@ -2657,13 +2974,15 @@ const bind = async () => {
     if (scheduleMatch && scheduleMatch[1] && form.checkin) {
       const parsed = quickPasteSchedule(scheduleMatch[1]);
       if (parsed.checkinAt) {
-        form.checkin.value = parsed.checkinAt;
-        form.checkout.value = parsed.checkoutAt
-          || window.UniteOps.addHoursLocal(parsed.checkinAt, window.UniteOps.packageHours(form.package.value));
+        setDateTimeControlValue("cbCheckin", parsed.checkinAt);
+        setDateTimeControlValue("cbCheckout", parsed.checkoutAt
+          || window.UniteOps.addHoursLocal(parsed.checkinAt, window.UniteOps.packageHours(form.package.value)));
         changed = true;
       } else if (parsed.checkinDate) {
-        form.checkin.value = "";
-        form.checkout.value = "";
+        setDateTimeControlValue("cbCheckin", "");
+        setDateTimeControlValue("cbCheckout", "");
+        const dateInput = document.getElementById("cbCheckinDate");
+        if (dateInput) dateInput.value = parsed.checkinDate;
         form.checkin.dataset.quickPasteTimeMissing = "true";
         form.checkin.dataset.quickPasteDate = parsed.checkinDate;
         missingCheckinTimeDate = parsed.checkinDate;
@@ -2672,12 +2991,14 @@ const bind = async () => {
     } else if (dateMatch && dateMatch[1]) {
       const parsed = quickPasteDateTime(dateMatch[1]);
       if (parsed.value && form.checkin) {
-        form.checkin.value = parsed.value;
-        form.checkout.value = window.UniteOps.addHoursLocal(parsed.value, window.UniteOps.packageHours(form.package.value));
+        setDateTimeControlValue("cbCheckin", parsed.value);
+        setDateTimeControlValue("cbCheckout", window.UniteOps.addHoursLocal(parsed.value, window.UniteOps.packageHours(form.package.value)));
         changed = true;
       } else if (parsed.date && form.checkin) {
-        form.checkin.value = "";
-        form.checkout.value = "";
+        setDateTimeControlValue("cbCheckin", "");
+        setDateTimeControlValue("cbCheckout", "");
+        const dateInput = document.getElementById("cbCheckinDate");
+        if (dateInput) dateInput.value = parsed.date;
         form.checkin.dataset.quickPasteTimeMissing = "true";
         form.checkin.dataset.quickPasteDate = parsed.date;
         missingCheckinTimeDate = parsed.date;
@@ -2689,7 +3010,7 @@ const bind = async () => {
       form.guests.value = String(guestTotal);
       changed = true;
     }
-    form.checkout?.dispatchEvent(new Event("change", { bubbles: true }));
+    document.getElementById("cbCheckoutDate")?.dispatchEvent(new Event("change", { bubbles: true }));
 
     if (changed) {
       const warning = missingCheckinTimeDate
@@ -2699,7 +3020,7 @@ const bind = async () => {
     } else {
       alert("Không tìm thấy thông tin phù hợp theo mẫu tin nhắn hệ thống.");
     }
-    if (missingCheckinTimeDate) form.checkin?.focus();
+    if (missingCheckinTimeDate) document.getElementById("cbCheckinTime")?.focus();
     else form.name?.focus();
   });
 

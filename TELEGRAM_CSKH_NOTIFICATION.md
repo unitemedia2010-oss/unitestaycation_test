@@ -4,7 +4,7 @@
 
 ```text
 Khách gửi booking
-  -> RPC create_public_booking_request lưu booking
+  -> RPC create_public_booking_v2 tự xếp phòng và tạo booking holding 30 phút
   -> trigger tạo một delivery pending trong cùng giao dịch
   -> Supabase Database Webhook gọi Edge Function
   -> Edge Function xác thực webhook, khóa delivery và đọc booking chuẩn
@@ -25,7 +25,7 @@ lại.
 - `supabase/functions/notify-booking-telegram/index.ts`: xác thực webhook, khóa
   delivery, gửi Telegram và cập nhật trạng thái.
 - `supabase/functions/notify-booking-telegram/_shared.ts`: tạo nội dung tin,
-  đổi giờ sang `Asia/Ho_Chi_Minh`, escape HTML và che số liên hệ.
+  đổi giờ sang `Asia/Ho_Chi_Minh`, định dạng 24 giờ và escape toàn bộ HTML.
 - `supabase/verify_telegram_booking_notifications.sql`: truy vấn kiểm tra và
   smoke test luôn rollback.
 
@@ -61,14 +61,18 @@ Khóa thật không nằm trong Git, migration hoặc trigger arguments. Nếu V
 Edge Function tắt kiểm tra JWT của nền tảng vì Database Webhook không có user
 JWT, nhưng request vẫn bắt buộc vượt qua secret riêng bằng so sánh constant-time.
 
-## Nội dung gửi vào nhóm
+## Nội dung gửi vào nhóm CSKH riêng
 
-Tin chỉ chứa mã đơn, chi nhánh/layout, giờ nhận/trả, gói, số khách và vài số cuối
-của Zalo/WhatsApp. Tên đầy đủ, email, ghi chú và số liên hệ đầy đủ không được gửi
-vào Telegram. Nút mở CSKH dùng dạng:
+Tin chứa mã đơn, **tên khách đầy đủ**, **số Zalo/WhatsApp đầy đủ**, chi
+nhánh, layout, phòng thực tế, giờ nhận/trả theo chuẩn 24 giờ, gói, số khách và
+thời hạn giữ phòng. Email và ghi chú riêng không bao giờ được đưa vào Telegram.
+Mọi trường động đều được HTML-escape trước khi gửi với `parse_mode=HTML`.
+
+Vì tin có thông tin liên hệ đầy đủ, chỉ cấu hình `TELEGRAM_CHAT_ID` của nhóm CSKH
+riêng, kiểm soát thành viên; không dùng nhóm cộng đồng. Nút mở CSKH dùng dạng:
 
 ```text
-https://unitestaycation.com.vn/cskh.html?status=new&booking=US-...
+https://unitestaycation.com.vn/cskh.html?status=holding&booking=US-...
 ```
 
 CSKH phải đăng nhập mới xem được dữ liệu đầy đủ.
@@ -82,7 +86,8 @@ CSKH phải đăng nhập mới xem được dữ liệu đầy đủ.
    khóa webhook trong Vault.
 5. Xác minh request không khóa bị chặn `401` và trigger `pg_net` đang bật.
 6. Tạo một booking test được ghi rõ `TEST - KHÔNG XỬ LÝ`; xác minh một tin duy
-   nhất xuất hiện, deep-link mở đúng đơn và delivery có trạng thái `sent`.
+   nhất xuất hiện, có đúng tên/số liên hệ/phòng/thời hạn giữ, không có email hay
+   ghi chú, deep-link mở đúng đơn và delivery có trạng thái `sent`.
 
 Nếu request Telegram bị timeout sau khi đã gửi đi, kết quả là không chắc chắn.
 Delivery phải được giữ để người vận hành kiểm tra trước khi thử lại, tránh tạo tin

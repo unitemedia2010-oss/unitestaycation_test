@@ -1,9 +1,13 @@
 -- Unite Staycation V15 audited & hardened schema
--- Chạy toàn bộ file này trong Supabase SQL Editor cho project mới.
+-- Chạy toàn bộ file này cho project mới, sau đó áp dụng các file trong
+-- supabase/migrations theo thứ tự timestamp. RPC inventory/hold V2 và Telegram
+-- outbox được định nghĩa trong migration để greenfield và production dùng đúng
+-- cùng một contract, không duy trì hai bản function dễ lệch nhau.
 -- Sau khi chạy, tạo user trong Authentication, rồi thêm user_id vào app_profiles với role super_admin/admin/cskh/accountant.
 
 create extension if not exists pgcrypto;
 create extension if not exists btree_gist;
+create extension if not exists pg_cron;
 
 create or replace function public.set_updated_at()
 returns trigger language plpgsql as $$
@@ -181,6 +185,12 @@ create table if not exists public.bookings (
   deposit_amount integer not null default 0 check (deposit_amount >= 0),
   paid_amount integer not null default 0 check (paid_amount >= 0),
   payment_method text,
+  hold_expires_at timestamptz,
+  public_request_id uuid,
+  package_code text check (package_code is null or package_code in ('3h', '4h', '8h', 'night', 'day')),
+  adults integer,
+  children integer,
+  nights integer,
   quickpay_claim_token uuid,
   quickpay_claimed_at timestamptz,
   assigned_to text,
@@ -204,12 +214,53 @@ create table if not exists public.bookings (
   constraint bookings_checkin_requires_room_unit check (
     status not in ('checked_in','checked_out')
     or room_unit_id is not null
+  ),
+  constraint bookings_inventory_state_check check (
+    (
+      status in ('new', 'consulting')
+      and room_unit_id is null
+      and hold_expires_at is null
+    )
+    or (
+      status = 'holding'
+      and room_unit_id is not null
+      and (hold_expires_at is null or public_request_id is not null)
+    )
+    or (
+      status in ('deposited', 'paid', 'checked_in')
+      and room_unit_id is not null
+      and hold_expires_at is null
+    )
+    or (
+      status in ('checked_out', 'cancelled', 'no_show')
+      and hold_expires_at is null
+    )
+  ),
+  constraint bookings_public_request_source_check check (
+    public_request_id is null or source_code = 'website'
+  ),
+  constraint bookings_public_party_check check (
+    (adults is null and children is null and nights is null)
+    or (
+      adults between 1 and 12
+      and children between 0 and 11
+      and nights between 1 and 30
+      and (nights = 1 or coalesce(package_code, '') = 'day')
+      and guests = adults + children
+      and guests between 1 and 12
+    )
   )
 );
 
 alter table public.bookings
   add column if not exists quickpay_claim_token uuid,
-  add column if not exists quickpay_claimed_at timestamptz;
+  add column if not exists quickpay_claimed_at timestamptz,
+  add column if not exists hold_expires_at timestamptz,
+  add column if not exists public_request_id uuid,
+  add column if not exists package_code text,
+  add column if not exists adults integer,
+  add column if not exists children integer,
+  add column if not exists nights integer;
 
 -- Chống trùng lịch theo từng phòng thật, chính xác theo giờ.
 -- Constraint này chặn các booking active bị giao nhau thời gian trên cùng room_unit_id.
@@ -236,7 +287,13 @@ begin
   if v_unit.id is null
      or new.room_type_id is distinct from v_unit.room_type_id
      or new.branch_id is distinct from v_unit.branch_id then
-    raise exception 'Phòng thực tế không thuộc layout/chi nhánh đã chọn';
+    raise exception 'VALIDATION_ERROR: room unit is outside the selected layout or branch'
+      using errcode = '23514';
+  end if;
+  if new.status in ('holding','deposited','paid','checked_in')
+     and v_unit.status <> 'available' then
+    raise exception 'ROOM_UNAVAILABLE: room unit is maintenance or hidden'
+      using errcode = '23514';
   end if;
   return new;
 end;
@@ -245,7 +302,7 @@ $$;
 revoke all on function public.validate_booking_room_unit_scope() from public;
 drop trigger if exists bookings_room_unit_scope_trigger on public.bookings;
 create trigger bookings_room_unit_scope_trigger
-before insert or update of room_unit_id, room_type_id, branch_id on public.bookings
+before insert or update of room_unit_id, room_type_id, branch_id, status on public.bookings
 for each row execute function public.validate_booking_room_unit_scope();
 
 -- Booking chưa xếp phòng vẫn giữ một suất của layout; chỉ room_unit_id cụ thể
@@ -364,6 +421,14 @@ create index if not exists bookings_checkin_idx on public.bookings(checkin_at);
 create index if not exists bookings_checkout_idx on public.bookings(checkout_at);
 create index if not exists bookings_status_idx on public.bookings(status);
 create index if not exists bookings_room_unit_idx on public.bookings(room_unit_id);
+create unique index if not exists bookings_public_request_id_unique_idx on public.bookings(public_request_id) where public_request_id is not null;
+create index if not exists bookings_expiring_public_holds_idx on public.bookings(hold_expires_at, id) where status = 'holding' and hold_expires_at is not null;
+create index if not exists bookings_website_contact_recent_idx
+  on public.bookings (
+    (pg_catalog.regexp_replace(pg_catalog.lower(customer_phone), '[^[:alnum:]+]+', '', 'g')),
+    created_at desc
+  )
+  where source_code = 'website';
 create index if not exists room_units_type_idx on public.room_units(room_type_id);
 create unique index if not exists room_prices_base_unique_idx on public.room_prices(room_type_id, package_code) where starts_at is null and ends_at is null;
 
@@ -480,7 +545,7 @@ from (values
   ('C1-NOIR','3h','3 tiếng',3,299000,10), ('C1-NOIR','4h','4 tiếng',4,379000,20), ('C1-NOIR','8h','8 tiếng',8,579000,30), ('C1-NOIR','day','Theo ngày',16,799000,40),
   ('C8-THE-ART','3h','3 tiếng',3,299000,10), ('C8-THE-ART','4h','4 tiếng',4,379000,20), ('C8-THE-ART','8h','8 tiếng',8,579000,30), ('C8-THE-ART','day','Theo ngày',16,759000,40),
   ('C9-VELVET','3h','3 tiếng',3,299000,10), ('C9-VELVET','4h','4 tiếng',4,379000,20), ('C9-VELVET','8h','8 tiếng',8,579000,30), ('C9-VELVET','day','Theo ngày',16,759000,40),
-  ('C10-MIDNIGHT','3h','3 tiếng',3,259000,10), ('C10-MIDNIGHT','4h','4 tiếng',4,359000,20), ('C10-MIDNIGHT','8h','8 tiếng',8,500000,30), ('C10-MIDNIGHT','day','Theo ngày',16,659000,40),
+  ('C10-MIDNIGHT','3h','3 tiếng',3,299000,10), ('C10-MIDNIGHT','4h','4 tiếng',4,359000,20), ('C10-MIDNIGHT','8h','8 tiếng',8,500000,30), ('C10-MIDNIGHT','day','Theo ngày',16,659000,40),
   ('C12-AMOR','3h','3 tiếng',3,329000,10), ('C12-AMOR','4h','4 tiếng',4,409000,20), ('C12-AMOR','8h','8 tiếng',8,629000,30), ('C12-AMOR','day','Theo ngày',16,829000,40),
   ('C12-ROMA','3h','3 tiếng',3,299000,10), ('C12-ROMA','4h','4 tiếng',4,379000,20), ('C12-ROMA','8h','8 tiếng',8,579000,30), ('C12-ROMA','day','Theo ngày',16,759000,40)
 ) as v(room_code,package_code,package_label,duration_hours,price,sort_order)

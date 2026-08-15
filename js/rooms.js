@@ -33,7 +33,7 @@ var rooms = [
   {
     id: "C8-THE-ART", chapter: "Chapter 8", type: "Studio", name: "ART Layout",
     location: "Chi nhánh Phan Tây Hồ", district: "Phú Nhuận", address: "Chi nhánh Phan Tây Hồ, Phú Nhuận",
-    priceTier: "signature", inventory: 3, status: "available",
+    priceTier: "signature", inventory: 3, status: "hidden",
     category: "Signature bathtub", vibe: "Signature studio · cửa vòm · bồn tắm", shortLine: "A signature room with artful curves and bath light.",
     description: "Một layout có tính thẩm mỹ cao, nổi bật với bồn tắm rời, cửa vòm và ánh sáng đẹp.",
     prices: [ { label: "3 tiếng", value: "299k" }, { label: "4 tiếng", value: "379k" }, { label: "Qua đêm", value: "579k" }, { label: "Ngày", value: "759k" } ],
@@ -45,7 +45,7 @@ var rooms = [
   {
     id: "C9-VELVET", chapter: "Chapter 9", type: "Studio", name: "VELVET Layout",
     location: "Chi nhánh Phan Tây Hồ", district: "Phú Nhuận", address: "Chi nhánh Phan Tây Hồ, Phú Nhuận",
-    priceTier: "premium", inventory: 3, status: "available",
+    priceTier: "premium", inventory: 3, status: "hidden",
     category: "Warm studio", vibe: "Warm luxury · cozy · private stay", shortLine: "Warm, soft, modern and deeply private.",
     description: "Không gian ấm, mềm và hiện đại, phù hợp cho khách muốn một căn phòng riêng tư, dễ chịu nhưng vẫn có cảm giác cao cấp.",
     prices: [ { label: "3 tiếng", value: "299k" }, { label: "4 tiếng", value: "379k" }, { label: "Qua đêm", value: "579k" }, { label: "Ngày", value: "759k" } ],
@@ -57,10 +57,10 @@ var rooms = [
   {
     id: "C10-MIDNIGHT", chapter: "Chapter 10", type: "Studio", name: "MID Layout",
     location: "Chi nhánh Phan Tây Hồ", district: "Phú Nhuận", address: "Chi nhánh Phan Tây Hồ, Phú Nhuận",
-    priceTier: "budget", inventory: 3, status: "available",
+    priceTier: "budget", inventory: 3, status: "hidden",
     category: "Giá tốt nhất", vibe: "Compact · giá tốt · tối giản", shortLine: "Compact, clean and easy to book.",
     description: "Studio nhỏ gọn, tối giản và dễ tiếp cận hơn về giá. Phù hợp khách cần một không gian riêng tư, sạch đẹp, tiện lợi.",
-    prices: [ { label: "3 tiếng", value: "259k" }, { label: "4 tiếng", value: "359k" }, { label: "Qua đêm", value: "500k" }, { label: "Ngày", value: "659k" } ],
+    prices: [ { label: "3 tiếng", value: "299k", packageCode: "3h", durationHours: 3 }, { label: "4 tiếng", value: "359k", packageCode: "4h", durationHours: 4 }, { label: "Qua đêm", value: "500k", packageCode: "night", durationHours: 8 }, { label: "Ngày", value: "659k", packageCode: "day", durationHours: 22 } ],
     tags: ["Studio", "Giá tốt nhất"],
     amenities: ["wifi", "aircon", "fridge", "hairdryer", "kettle", "hygiene", "tv", "self-checkin"],
     filters: ["Chi nhánh Phan Tây Hồ", "Phú Nhuận", "budget"],

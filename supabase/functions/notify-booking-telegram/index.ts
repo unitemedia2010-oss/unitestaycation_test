@@ -3,6 +3,7 @@ import {
   buildTelegramMessage,
   constantTimeEqual,
   type DatabaseWebhookPayload,
+  finalizeTelegramDelivery,
   isUuid,
   parseDatabaseWebhookPayload,
   toDeliveryId,
@@ -181,7 +182,7 @@ async function fetchBooking(
 ): Promise<BookingForNotification | null> {
   const query = new URLSearchParams({
     select:
-      "id,public_code,source_code,status,created_by,customer_phone,checkin_at,checkout_at,package_label,guests,branches(name),room_types(code,name)",
+      "id,public_code,source_code,status,created_by,customer_name,customer_phone,checkin_at,checkout_at,package_label,guests,hold_expires_at,branches(name),room_types(code,name),room_units(code,unit_name)",
     id: `eq.${bookingId}`,
     limit: "1",
   });
@@ -191,8 +192,8 @@ async function fetchBooking(
   return rows[0] ?? null;
 }
 
-function isNewWebsiteBooking(booking: BookingForNotification): boolean {
-  return booking.source_code === "website" && booking.status === "new" &&
+function isWebsiteHoldingBooking(booking: BookingForNotification): boolean {
+  return booking.source_code === "website" && booking.status === "holding" &&
     booking.created_by === null;
 }
 
@@ -370,7 +371,7 @@ async function handler(request: Request): Promise<Response> {
     }
     const booking = await fetchBooking(delivery.booking_id);
     if (!booking) throw new SafeError("booking_missing", 422);
-    if (!isNewWebsiteBooking(booking)) {
+    if (!isWebsiteHoldingBooking(booking)) {
       throw new SafeError("booking_not_eligible", 422);
     }
 
@@ -386,12 +387,11 @@ async function handler(request: Request): Promise<Response> {
     const telegramMessageId = await sendTelegramMessage(
       buildTelegramMessage(booking),
     );
-    const finalized = await updateDelivery(deliveryId, {
-      status: "sent",
-      sent_at: new Date().toISOString(),
-      telegram_message_id: telegramMessageId,
-      last_error: null,
-    });
+    const finalized = await finalizeTelegramDelivery(
+      updateDelivery,
+      deliveryId,
+      telegramMessageId,
+    );
     if (!finalized) {
       // Leave the row in processing so a retry cannot send the same message again.
       console.error("telegram delivery finalize failed", { deliveryId });

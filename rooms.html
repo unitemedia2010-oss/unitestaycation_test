@@ -6,7 +6,7 @@
   <title>Chọn phòng | Unite Staycation</title>
   <meta name="description" content="Chọn phòng Unite Staycation theo địa điểm, ngày, gói lưu trú và số khách." />
   <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/custom.css?v=v15.4" />
+  <link rel="stylesheet" href="css/custom.css?v=v16.5" />
 </head>
 <body data-page="rooms">
   <div class="page-progress" id="pageProgress"></div>
@@ -60,9 +60,9 @@
           <small>Chọn khu vực lưu trú.</small>
         </button>
         <div class="booking-popover destination-popover" data-booking-panel="destination">
-          <button type="button" data-destination="all" class="active">Tất cả địa điểm <small>7 layout đang mở</small></button>
+          <button type="button" data-destination="all" class="active">Tất cả địa điểm <small>Đang tải catalogue</small></button>
           <button type="button" data-destination="Chi nhánh Nhiêu Tứ">Chi nhánh Nhiêu Tứ <small>Gần Phan Xích Long</small></button>
-          <button type="button" data-destination="Chi nhánh Phan Tây Hồ">Chi nhánh Phan Tây Hồ <small>Yên tĩnh, riêng tư</small></button>
+          <button type="button" data-destination="Chi nhánh Phan Tây Hồ" hidden>Chi nhánh Phan Tây Hồ <small>Yên tĩnh, riêng tư</small></button>
           <button type="button" data-destination="Chi nhánh Lê Văn Sĩ">Chi nhánh Lê Văn Sĩ <small>Ấm, riêng tư, dễ di chuyển</small></button>
         </div>
       </div>
@@ -70,8 +70,8 @@
       <div class="booking-field" data-panel="dates">
         <button type="button" class="booking-trigger" aria-expanded="false">
           <span>Nhận phòng</span>
-          <strong id="bookingDateText">Hôm nay</strong>
-          <small id="bookingCheckoutText">Trả phòng theo gói đã chọn.</small>
+          <strong id="bookingDateText">Chọn ngày & giờ</strong>
+          <small id="bookingCheckoutText">Chọn chính xác để xem phòng trống.</small>
         </button>
         <div class="booking-popover date-popover" data-booking-panel="dates">
           <div class="calendar-toolbar">
@@ -191,8 +191,8 @@
   </footer>
 
   <script src="js/supabase-config.js?v=v15.4"></script>
-  <script src="js/rooms.js?v=v15.4"></script>
-<script src="js/app.js?v=v15.4.7"></script>
+  <script src="js/rooms.js?v=v16.5"></script>
+<script src="js/app.js?v=v16.5"></script>
   <script src="js/luxury-effects.js?v=v15"></script>
 </body>
 </html>

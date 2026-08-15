@@ -76,8 +76,9 @@ from pg_catalog.pg_constraint con
 where con.conrelid = 'public.booking_notification_deliveries'::regclass
 order by con.contype, con.conname;
 
--- 4. Expected: AFTER INSERT trigger with the website/new/created_by-null WHEN
--- predicate; trigger function is SECURITY DEFINER with a fixed search_path.
+-- 4. Expected after booking_inventory_holds_v2: AFTER INSERT trigger with the
+-- website/holding/public_request_id/created_by-null WHEN predicate; trigger
+-- function is SECURITY DEFINER with a fixed search_path.
 select
   trg.tgname,
   pg_catalog.pg_get_triggerdef(trg.oid) as definition
@@ -155,26 +156,59 @@ declare
   v_booking_id uuid;
   v_booking_public_code text;
   v_internal_booking_id uuid;
+  v_branch_id uuid;
+  v_room_type_id uuid;
+  v_room_unit_id uuid;
+  v_fixture_suffix text := pg_catalog.replace(pg_catalog.gen_random_uuid()::text, '-', '');
   v_delivery_count integer;
   v_affected_rows integer;
   v_history_preserved boolean;
 begin
+  insert into public.branches (slug, name, is_active)
+  values ('verify-telegram-' || v_fixture_suffix, 'Verify Telegram', true)
+  returning id into v_branch_id;
+
+  insert into public.room_types (
+    branch_id, code, name, inventory_count, max_guests, status, is_published
+  ) values (
+    v_branch_id, 'VERIFY-TELEGRAM-' || v_fixture_suffix,
+    'Verify Telegram layout', 1, 2, 'available', true
+  ) returning id into v_room_type_id;
+
+  insert into public.room_units (
+    branch_id, room_type_id, code, unit_name, status
+  ) values (
+    v_branch_id, v_room_type_id,
+    'VERIFY-TELEGRAM-' || v_fixture_suffix || '-P1',
+    'Phòng 1', 'available'
+  ) returning id into v_room_unit_id;
+
   insert into public.bookings (
+    public_request_id,
     source_code,
+    branch_id,
+    room_type_id,
+    room_unit_id,
     customer_name,
     customer_phone,
     checkin_at,
     checkout_at,
     status,
+    hold_expires_at,
     created_by
   )
   values (
+    pg_catalog.gen_random_uuid(),
     'website',
+    v_branch_id,
+    v_room_type_id,
+    v_room_unit_id,
     'Telegram outbox verification',
     'verification-telegram-outbox',
     pg_catalog.now() + interval '10 years',
     pg_catalog.now() + interval '10 years 3 hours',
-    'new',
+    'holding',
+    pg_catalog.now() + interval '30 minutes',
     null
   )
   returning id, public_code into v_booking_id, v_booking_public_code;
@@ -185,7 +219,8 @@ begin
   where d.booking_id = v_booking_id
     and d.event_type = 'booking.created'
     and d.channel = 'telegram'
-    and d.status = 'pending';
+    and d.status = 'pending'
+    and d.last_dispatch_at is not null;
 
   raise notice 'qualified booking delivery count = %', v_delivery_count;
   if v_delivery_count <> 1 then

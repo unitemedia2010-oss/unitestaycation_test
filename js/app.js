@@ -14,14 +14,46 @@ const promotionBadgeHTML = (room) => {
 };
 
 const syncStaticLiveImages = () => {
+  const roomMap = new Map(rooms.map(room => [room.id, room]));
+  const firstRoomWithImage = rooms.find(room => getMainImage(room));
   $$('[data-live-room-image]').forEach(img => {
-    const room = rooms.find(item => item.id === img.dataset.liveRoomImage);
+    const holder = img.closest('.match-card, .about-media');
+    const isMatchCard = holder?.classList.contains('match-card');
+    const isAboutMedia = holder?.classList.contains('about-media');
+    let room = roomMap.get(img.dataset.liveRoomImage);
+    if (isAboutMedia && !getMainImage(room || {})) {
+      room = firstRoomWithImage;
+      if (room) img.dataset.liveRoomImage = room.id;
+    }
     const src = getMainImage(room || {});
-    if (!src) return;
+    if (!room || !src) {
+      img.style.display = "none";
+      holder?.classList.add('image-missing');
+      if (isMatchCard) {
+        holder.hidden = true;
+        holder.setAttribute('aria-hidden', 'true');
+        holder.removeAttribute('href');
+      } else if (isAboutMedia) {
+        holder.hidden = true;
+      }
+      return;
+    }
     img.style.display = "";
-    img.closest('.match-card, .about-media')?.classList.remove('image-missing');
-    if (img.src !== src) img.src = src;
+    holder?.classList.remove('image-missing');
+    if (isMatchCard) {
+      holder.hidden = false;
+      holder.removeAttribute('aria-hidden');
+      holder.href = bookingUrl("room.html", readBookingState(), {
+        branchId: room.branchId || room.location,
+        roomTypeCode: room.id
+      });
+    } else if (isAboutMedia) {
+      holder.hidden = false;
+    }
+    if (img.getAttribute("src") !== src) img.src = src;
   });
+  const matchSection = $("#stayMatch");
+  if (matchSection) matchSection.hidden = !$$('.match-card', matchSection).some(card => !card.hidden);
 };
 
 const imgTag = (src, alt, className = "") => `
@@ -49,7 +81,8 @@ const formatStayDate = (offsetDays = 0) => {
 };
 
 const ADMIN_STORAGE_KEY = "unite-staycation-admin-overrides-v1";
-const SMART_BOOKING_STORAGE_KEY = "unite-staycation-smart-booking-v1";
+const SMART_BOOKING_STORAGE_KEY = "unite-staycation-booking-state-v2";
+const LEGACY_SMART_BOOKING_STORAGE_KEY = "unite-staycation-smart-booking-v1";
 const LANG_STORAGE_KEY = "unite-staycation-language-v1";
 const CONTACT_CHANNEL_STORAGE_KEY = "unite-staycation-contact-channels-v2";
 
@@ -139,9 +172,9 @@ Object.assign(textTranslations, {
     CHN: "每个房型都有自己的氛围：浴缸、深色调、拱门、温暖高级感或高性价比小房型。"
   },
   "Bảng giá rõ ràng": { ENG: "See rates first", CHN: "先看价格" },
-  "Giá được phân theo 3 giờ, 4 giờ, 8 giờ và theo ngày để dễ lựa chọn.": {
-    ENG: "Rates are split by 3h, 4h, 8h and day packages so guests can compare easily.",
-    CHN: "价格按3小时、4小时、8小时和整日套餐划分，方便客人比较。"
+  "Giá được phân theo 3 giờ, 4 giờ, qua đêm và theo ngày để dễ lựa chọn.": {
+    ENG: "Rates are split by 3-hour, 4-hour, overnight and day packages so guests can compare easily.",
+    CHN: "价格按3小时、4小时、过夜和整日套餐划分，方便客人比较。"
   },
   "Nội quy minh bạch": { ENG: "Know the rules", CHN: "了解规则" },
   "Thông tin sức chứa, giờ trả phòng và phụ thu được thể hiện trước khi đặt.": {
@@ -260,9 +293,9 @@ Object.assign(textTranslations, {
     CHN: "提前回答基础问题，让客人更安心，也减少来回询问。"
   },
   "Unite đặt theo giờ hay theo ngày?": { ENG: "Can Unite be booked hourly or daily?", CHN: "Unite 可以按小时或按天预订吗？" },
-  "Có cả hai. Khách có thể tham khảo các gói 3h, 4h, 8h và ngày trong bảng giá.": {
-    ENG: "Both. Guests can check the 3h, 4h, 8h and day packages in the rate table.",
-    CHN: "都可以。客人可在价格表查看3小时、4小时、8小时和整日套餐。"
+  "Có cả hai. Khách có thể tham khảo các gói 3h, 4h, qua đêm và ngày trong bảng giá.": {
+    ENG: "Both. Guests can check the 3-hour, 4-hour, overnight and day packages in the rate table.",
+    CHN: "都可以。客人可在价格表查看3小时、4小时、过夜和整日套餐。"
   },
   "Phòng phù hợp cho mấy người?": { ENG: "How many guests fit in a room?", CHN: "房间适合几个人？" },
   "Mỗi phòng ưu tiên tối đa 2 khách để giữ sự riêng tư, sạch sẽ và thoải mái.": {
@@ -563,9 +596,9 @@ Object.assign(textTranslations, {
     ENG: "Clear rates",
     CHN: "价格清晰"
   },
-  "Giá được phân theo 3 giờ, 4 giờ, 8 giờ và theo ngày để dễ lựa chọn.": {
-    ENG: "Rates are grouped by 3 hours, 4 hours, 8 hours and full-day stays for easy comparison.",
-    CHN: "价格按3小时、4小时、8小时与全天分组，方便比较。"
+  "Giá được phân theo 3 giờ, 4 giờ, qua đêm và theo ngày để dễ lựa chọn.": {
+    ENG: "Rates are grouped by 3-hour, 4-hour, overnight and full-day stays for easy comparison.",
+    CHN: "价格按3小时、4小时、过夜与全天分组，方便比较。"
   },
   "Nội quy minh bạch": {
     ENG: "Transparent rules",
@@ -788,9 +821,9 @@ Object.assign(textTranslations, {
   "Trước khi đến": { ENG: "Before arrival", CHN: "到店前" },
   "Quy trình đặt phòng rõ ràng.": { ENG: "A clear booking flow.", CHN: "清晰的预订流程。" },
   "Chọn gói": { ENG: "Choose a package", CHN: "选择套餐" },
-  "Chọn 3h, 4h, 8h hoặc ngày theo lịch cần nghỉ.": {
-    ENG: "Choose 3h, 4h, 8h or day stay based on your plan.",
-    CHN: "按行程选择3小时、4小时、8小时或按天入住。"
+  "Chọn 3h, 4h, qua đêm hoặc ngày theo lịch cần nghỉ.": {
+    ENG: "Choose a 3-hour, 4-hour, overnight or day stay based on your plan.",
+    CHN: "按行程选择3小时、4小时、过夜或按天入住。"
   },
   "Nhắn mã phòng": { ENG: "Send room code", CHN: "发送房型编号" },
   "Xác nhận": { ENG: "Confirm", CHN: "确认" },
@@ -1175,15 +1208,16 @@ const toDateInputValue = (date = new Date()) => toDatetimeLocalValue(date).slice
 
 const bookingPackageHours = (label = "3 tiếng", nights = 1, roomId = "") => {
   const value = String(label || "").trim().toLowerCase();
+  if (value.includes("ngày") || value === "day") return 22 + (Math.max(1, Number(nights || 1)) - 1) * 24;
+  if (value.startsWith("3") || value === "3h") return 3;
+  if (value.startsWith("4") || value === "4h") return 4;
+  if (value.includes("qua đêm") || value === "night" || value.startsWith("8")) return 8;
   const room = roomId && typeof rooms !== "undefined" ? rooms.find(item => item.id === roomId) : null;
   const price = room?.prices?.find(item => String(item.label || "").trim().toLowerCase() === value);
   const configuredHours = Number(price?.durationHours || 0);
   if (configuredHours > 0) {
     return configuredHours + (value.includes("ngày") ? (Math.max(1, Number(nights || 1)) - 1) * 24 : 0);
   }
-  if (value.startsWith("4")) return 4;
-  if (value.includes("qua đêm") || value.startsWith("8")) return 8;
-  if (value.includes("ngày")) return 16 + (Math.max(1, Number(nights || 1)) - 1) * 24;
   return 3;
 };
 
@@ -1200,12 +1234,9 @@ const defaultBookingCheckin = (context = {}) => {
     return toDatetimeLocalValue(requested);
   }
   const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(context.date || "") ? context.date : toDateInputValue(now);
-  const isLongStay = bookingPackageHours(context.packageLabel || context.duration, context.nights, context.roomId) >= 8;
-  let candidate = bookingAsDate(`${dateKey}T${isLongStay ? "20:00" : "14:00"}`);
-  if (candidate.getTime() <= now.getTime() + 30 * 60_000) {
-    const halfHour = 30 * 60_000;
-    candidate = new Date(Math.ceil((now.getTime() + 60 * 60_000) / halfHour) * halfHour);
-  }
+  const packageCode = normalizeBookingPackageCode(context.packageCode || context.packageLabel || context.duration);
+  let candidate = bookingAsDate(`${dateKey}T${BOOKING_PACKAGES[packageCode]?.defaultTime || "14:00"}`);
+  if (candidate.getTime() <= now.getTime() + 30 * 60_000) return "";
   return toDatetimeLocalValue(candidate);
 };
 
@@ -1213,13 +1244,15 @@ const normalizeDestination = (value = "") => {
   const text = String(value || "").trim();
   if (text === "29 Nhiêu Tứ") return "Chi nhánh Nhiêu Tứ";
   if (text === "76/39 Phan Tây Hồ") return "Chi nhánh Phan Tây Hồ";
-  if (text === "Lê Văn Sĩ" || text === "Lê Văn Sỹ") return "Chi nhánh Lê Văn Sĩ";
+  if (/^(?:Chi nhánh\s+)?Lê Văn S[ĩỹ]$/i.test(text)) return "Chi nhánh Lê Văn Sĩ";
   return text;
 };
 
 const readStoredSmartBooking = () => {
   try {
-    return JSON.parse(localStorage.getItem(SMART_BOOKING_STORAGE_KEY) || "{}");
+    const current = sessionStorage.getItem(SMART_BOOKING_STORAGE_KEY);
+    if (current) return JSON.parse(current);
+    return JSON.parse(localStorage.getItem(LEGACY_SMART_BOOKING_STORAGE_KEY) || "{}");
   } catch {
     return {};
   }
@@ -1227,10 +1260,259 @@ const readStoredSmartBooking = () => {
 
 const writeStoredSmartBooking = (state) => {
   try {
-    localStorage.setItem(SMART_BOOKING_STORAGE_KEY, JSON.stringify(state));
+    sessionStorage.setItem(SMART_BOOKING_STORAGE_KEY, JSON.stringify(state));
+    localStorage.removeItem(LEGACY_SMART_BOOKING_STORAGE_KEY);
   } catch {
     // The dock still works without persistence.
   }
+};
+
+const BOOKING_PACKAGES = Object.freeze({
+  "3h": { code: "3h", label: "3 tiếng", display: "3 giờ", defaultTime: "14:00", hours: 3 },
+  "4h": { code: "4h", label: "4 tiếng", display: "4 giờ", defaultTime: "14:00", hours: 4 },
+  night: { code: "night", label: "Qua đêm", display: "Qua đêm", defaultTime: "22:00", hours: 8 },
+  day: { code: "day", label: "Ngày", display: "Theo ngày", defaultTime: "14:00", hours: 22 }
+});
+
+const normalizeBookingPackageCode = (value = "3h") => {
+  const text = String(value || "").trim().toLowerCase();
+  if (["3h", "3 giờ", "3 gio", "3 tiếng", "3 tieng"].includes(text)) return "3h";
+  if (["4h", "4 giờ", "4 gio", "4 tiếng", "4 tieng"].includes(text)) return "4h";
+  if (["night", "8h", "8 giờ", "8 tiếng", "qua đêm", "qua dem"].includes(text)) return "night";
+  if (["day", "ngày", "ngay", "theo ngày", "theo ngay"].includes(text)) return "day";
+  return BOOKING_PACKAGES[text] ? text : "3h";
+};
+
+const bookingDateKey = (value = new Date()) => toDatetimeLocalValue(value).slice(0, 10);
+
+const bookingTimeKey = (value = "") => {
+  const match = String(value || "").match(/T(\d{2}:\d{2})/);
+  return match?.[1] || "";
+};
+
+const bookingLocalIso = (dateKey = "", timeKey = "") => (
+  /^\d{4}-\d{2}-\d{2}$/.test(dateKey) && /^\d{2}:\d{2}$/.test(timeKey)
+    ? `${dateKey}T${timeKey}`
+    : ""
+);
+
+const bookingCheckoutValue = (checkinAt = "", packageCode = "3h", nights = 1, roomCode = "") => {
+  if (!checkinAt) return "";
+  const packageConfig = BOOKING_PACKAGES[normalizeBookingPackageCode(packageCode)];
+  const hours = packageConfig.code === "day"
+    ? 22 + (Math.max(1, Number(nights || 1)) - 1) * 24
+    : packageConfig.hours;
+  const checkin = bookingAsDate(checkinAt);
+  if (Number.isNaN(checkin.getTime())) return "";
+  return toDatetimeLocalValue(new Date(checkin.getTime() + hours * 60 * 60_000));
+};
+
+const bookingStateParams = new Set([
+  "branch", "room", "id", "package", "checkin", "checkout", "nights", "adults", "children",
+  "destination", "duration", "date"
+]);
+
+const normalizeBookingState = (source = {}, room = null) => {
+  const packageCode = normalizeBookingPackageCode(source.packageCode || source.package || source.duration);
+  const nights = packageCode === "day"
+    ? Math.min(30, Math.max(1, Number(source.nights || 1)))
+    : 1;
+  const adults = Math.min(2, Math.max(1, Number(source.adults || 2)));
+  const children = Math.min(2 - adults, Math.max(0, Number(source.children || 0)));
+  let checkinAt = String(source.checkinAt || source.checkin || "").slice(0, 16);
+  const legacyDate = String(source.date || "");
+  if (!checkinAt && /^\d{4}-\d{2}-\d{2}$/.test(legacyDate)) {
+    checkinAt = bookingLocalIso(legacyDate, BOOKING_PACKAGES[packageCode].defaultTime);
+  }
+  if (checkinAt && Number.isNaN(bookingAsDate(checkinAt).getTime())) checkinAt = "";
+  if (checkinAt && bookingAsDate(checkinAt).getTime() < Date.now() - 5 * 60_000) checkinAt = "";
+  const roomTypeCode = String(source.roomTypeCode || source.room || room?.id || "");
+  const branchId = String(source.branchId || source.branch || room?.branchId || source.destination || room?.location || "all");
+  return {
+    branchId: normalizeDestination(branchId || "all"),
+    roomTypeCode,
+    packageCode,
+    checkinAt,
+    checkoutAt: bookingCheckoutValue(checkinAt, packageCode, nights, roomTypeCode),
+    nights,
+    adults,
+    children
+  };
+};
+
+const readBookingState = (overrides = {}) => {
+  const params = new URLSearchParams(window.location.search);
+  const stored = readStoredSmartBooking();
+  const definedOverrides = Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined));
+  const roomCode = overrides.roomTypeCode || overrides.room || params.get("id") || params.get("room") || stored.roomTypeCode || stored.room || "";
+  const room = typeof rooms !== "undefined" ? rooms.find(item => item.id === roomCode) : null;
+  return normalizeBookingState({
+    ...stored,
+    branchId: params.get("branch") || params.get("destination") || stored.branchId || stored.destination,
+    roomTypeCode: roomCode,
+    packageCode: params.get("package") || params.get("duration") || stored.packageCode || stored.duration,
+    checkinAt: params.get("checkin") || params.get("checkinAt") || stored.checkinAt,
+    date: params.get("date") || stored.date,
+    nights: params.get("nights") || stored.nights,
+    adults: params.get("adults") || stored.adults,
+    children: params.get("children") || stored.children,
+    ...definedOverrides
+  }, room);
+};
+
+const persistBookingState = (state, { replaceUrl = false } = {}) => {
+  const normalized = normalizeBookingState(state, rooms.find(room => room.id === state.roomTypeCode));
+  writeStoredSmartBooking(normalized);
+  if (replaceUrl && window.history?.replaceState) {
+    const url = new URL(window.location.href);
+    bookingStateParams.forEach(key => url.searchParams.delete(key));
+    if (normalized.branchId && normalized.branchId !== "all") url.searchParams.set("branch", normalized.branchId);
+    if (normalized.roomTypeCode) url.searchParams.set(url.pathname.endsWith("room.html") ? "id" : "room", normalized.roomTypeCode);
+    url.searchParams.set("package", normalized.packageCode);
+    if (normalized.checkinAt) {
+      url.searchParams.set("checkin", normalized.checkinAt);
+      url.searchParams.set("checkout", normalized.checkoutAt);
+    }
+    if (normalized.packageCode === "day") url.searchParams.set("nights", String(normalized.nights));
+    url.searchParams.set("adults", String(normalized.adults));
+    url.searchParams.set("children", String(normalized.children));
+    window.history.replaceState({}, "", url);
+  }
+  window.dispatchEvent(new CustomEvent("unite:booking-state", { detail: normalized }));
+  return normalized;
+};
+
+const bookingUrl = (pathname, state, overrides = {}) => {
+  const normalized = normalizeBookingState({ ...state, ...overrides });
+  const params = new URLSearchParams();
+  if (normalized.branchId && normalized.branchId !== "all") params.set("branch", normalized.branchId);
+  if (normalized.roomTypeCode) params.set(pathname.includes("room.html") ? "id" : "room", normalized.roomTypeCode);
+  params.set("package", normalized.packageCode);
+  if (normalized.checkinAt) {
+    params.set("checkin", normalized.checkinAt);
+    params.set("checkout", normalized.checkoutAt);
+  }
+  if (normalized.packageCode === "day") params.set("nights", String(normalized.nights));
+  params.set("adults", String(normalized.adults));
+  params.set("children", String(normalized.children));
+  return `${pathname}?${params.toString()}`;
+};
+
+const bookingHasExactInterval = (state) => {
+  const start = bookingAsDate(state?.checkinAt || "");
+  const end = bookingAsDate(state?.checkoutAt || "");
+  return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start;
+};
+
+const bookingTimeOptions = () => Array.from({ length: 48 }, (_, index) => {
+  const hours = String(Math.floor(index / 2)).padStart(2, "0");
+  const minutes = index % 2 ? "30" : "00";
+  return `${hours}:${minutes}`;
+});
+
+if (typeof window !== "undefined") {
+  window.UniteBookingState = {
+    packages: BOOKING_PACKAGES,
+    normalize: normalizeBookingState,
+    read: readBookingState,
+    persist: persistBookingState,
+    url: bookingUrl,
+    hasExactInterval: bookingHasExactInterval
+  };
+}
+
+const publicSupabaseConnection = () => {
+  const config = window.UNITE_SUPABASE_CONFIG || {};
+  const baseUrl = String(config.url || "").replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
+  const key = config.publishableKey || config.anonKey || "";
+  return { baseUrl, key, ready: Boolean(baseUrl && key && !baseUrl.includes("PASTE_") && !key.includes("PASTE_")) };
+};
+
+const publicRpc = async (name, payload, { signal } = {}) => {
+  const { baseUrl, key, ready } = publicSupabaseConnection();
+  if (!ready) {
+    const error = new Error("Kênh kiểm tra phòng trực tuyến chưa sẵn sàng.");
+    error.code = "SERVICE_UNAVAILABLE";
+    throw error;
+  }
+  const response = await fetch(`${baseUrl}/rest/v1/rpc/${encodeURIComponent(name)}`, {
+    method: "POST",
+    headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal
+  });
+  const raw = await response.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+  if (!response.ok) {
+    const knownCode = data?.error_code || data?.code;
+    const error = new Error({
+      ROOM_UNAVAILABLE: "Khung giờ vừa được khách khác giữ. Vui lòng chọn lịch thay thế.",
+      VALIDATION_ERROR: "Thông tin đặt phòng chưa hợp lệ.",
+      PGRST202: "Tính năng kiểm tra phòng đang được cập nhật."
+    }[knownCode] || "Không thể kết nối lịch phòng lúc này. Vui lòng thử lại.");
+    error.code = knownCode || (response.status === 404 ? "SERVICE_UNAVAILABLE" : "REQUEST_FAILED");
+    error.status = response.status;
+    throw error;
+  }
+  return data;
+};
+
+const publicAvailability = async (state, roomCode = null, options = {}) => {
+  if (!bookingHasExactInterval(state)) return [];
+  const rows = await publicRpc("public_room_availability_v2", {
+    p_checkin_at: bookingAsDate(state.checkinAt).toISOString(),
+    p_checkout_at: bookingAsDate(state.checkoutAt).toISOString(),
+    p_guests: state.adults + state.children,
+    p_room_code: roomCode || null
+  }, options);
+  return (Array.isArray(rows) ? rows : rows ? [rows] : []).map(row => ({
+    roomCode: row.room_code || row.roomCode || roomCode || "",
+    capacity: Math.max(0, Number(row.capacity || 0)),
+    reserved: Math.max(0, Number(row.reserved || 0)),
+    remaining: Math.max(0, Number(row.remaining || 0)),
+    available: row.available === true || Number(row.remaining || 0) > 0
+  }));
+};
+
+const publicAlternatives = async (state, roomCode, options = {}) => {
+  if (!roomCode || !bookingHasExactInterval(state)) return [];
+  const rows = await publicRpc("public_room_alternatives_v2", {
+    p_room_code: roomCode,
+    p_checkin_at: bookingAsDate(state.checkinAt).toISOString(),
+    p_package_code: state.packageCode,
+    p_nights: state.nights,
+    p_guests: state.adults + state.children,
+    p_limit: 3
+  }, options);
+  return (Array.isArray(rows) ? rows : rows ? [rows] : []).slice(0, 3).map(row => ({
+    type: row.alternative_type || "same_room_time",
+    roomCode: row.room_code || roomCode,
+    roomName: row.room_name || "Layout khác",
+    checkinAt: toDatetimeLocalValue(row.checkin_at),
+    checkoutAt: toDatetimeLocalValue(row.checkout_at),
+    remaining: Math.max(0, Number(row.remaining || 0)),
+    sortOrder: Number(row.sort_order || 0)
+  }));
+};
+
+const publicRequestId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, token => {
+    const random = Math.random() * 16 | 0;
+    return (token === "x" ? random : (random & 0x3) | 0x8).toString(16);
+  });
+};
+
+const friendlyAvailabilityError = (error) => {
+  const known = {
+    ROOM_UNAVAILABLE: "Khung giờ này vừa hết phòng. Mời bạn chọn một lịch khác bên dưới.",
+    VALIDATION_ERROR: "Vui lòng kiểm tra lại ngày, giờ và thông tin liên hệ.",
+    SERVICE_UNAVAILABLE: "Chưa thể tải lịch phòng trực tuyến. Vui lòng thử lại sau ít phút."
+  }[error?.code];
+  if (known) return known;
+  if (!error?.code && error?.message) return error.message;
+  return "Chưa thể kiểm tra lịch phòng. Vui lòng thử lại.";
 };
 
 const defaultContactChannels = [
@@ -1329,7 +1611,7 @@ const formatContactMoment = (value = "") => {
   return new Intl.DateTimeFormat("vi-VN", {
     timeZone: BOOKING_TIME_ZONE,
     day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit"
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
   }).format(date);
 };
 
@@ -1338,7 +1620,7 @@ const formatContactTime = (value = "") => {
   if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat("vi-VN", {
     timeZone: BOOKING_TIME_ZONE,
-    hour: "2-digit", minute: "2-digit"
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
   }).format(date);
 };
 
@@ -1354,23 +1636,26 @@ const formatContactDate = (dateKey = "") => {
 const buildContactContextUrl = (context = {}) => {
   try {
     const url = new URL(context.url || window.location.href);
-    if (context.roomId && context.roomId !== "chưa chọn") url.searchParams.set("id", context.roomId);
-    if (context.destination) {
-      url.searchParams.set("destination", context.destination === "Tất cả địa điểm" ? "all" : context.destination);
+    bookingStateParams.forEach(key => url.searchParams.delete(key));
+    const state = normalizeBookingState(context.bookingState || {
+      branchId: context.branchId || context.destination,
+      roomTypeCode: context.roomId,
+      packageCode: context.packageCode || context.packageLabel,
+      checkinAt: context.checkinAt,
+      nights: context.nights,
+      adults: context.adults,
+      children: context.children
+    });
+    if (state.roomTypeCode) url.searchParams.set(url.pathname.endsWith("room.html") ? "id" : "room", state.roomTypeCode);
+    if (state.branchId && state.branchId !== "all") url.searchParams.set("branch", state.branchId);
+    url.searchParams.set("package", state.packageCode);
+    if (state.checkinAt) {
+      url.searchParams.set("checkin", state.checkinAt);
+      url.searchParams.set("checkout", state.checkoutAt);
     }
-    if (context.date) url.searchParams.set("date", context.date);
-    if (context.packageLabel) url.searchParams.set("duration", context.packageLabel);
-    url.searchParams.set("adults", String(Math.max(1, Number(context.adults || 1))));
-    url.searchParams.set("children", String(Math.max(0, Number(context.children || 0))));
-    if (context.checkinAt) url.searchParams.set("checkin", context.checkinAt);
-    else url.searchParams.delete("checkin");
-    if (context.packageLabel === "Ngày") {
-      url.searchParams.set("nights", String(Math.max(1, Number(context.nights || 1))));
-      if (context.checkoutAt) url.searchParams.set("checkout", context.checkoutAt.slice(0, 10));
-    } else {
-      url.searchParams.delete("nights");
-      url.searchParams.delete("checkout");
-    }
+    if (state.packageCode === "day") url.searchParams.set("nights", String(state.nights));
+    url.searchParams.set("adults", String(state.adults));
+    url.searchParams.set("children", String(state.children));
     return url.toString();
   } catch {
     return context.url || window.location.href;
@@ -1378,42 +1663,47 @@ const buildContactContextUrl = (context = {}) => {
 };
 
 const getContactContext = (overrides = {}) => {
-  const params = new URLSearchParams(window.location.search);
-  const stored = readStoredSmartBooking();
-  const roomId = overrides.roomId || overrides.room || params.get("id") || params.get("room") || stored.room || "";
+  const state = readBookingState({
+    branchId: overrides.branchId || overrides.destination,
+    roomTypeCode: overrides.roomId || overrides.room,
+    packageCode: overrides.packageCode || overrides.packageLabel || overrides.duration,
+    checkinAt: overrides.checkinAt,
+    date: overrides.date,
+    nights: overrides.nights,
+    adults: overrides.adults,
+    children: overrides.children
+  });
+  const roomId = state.roomTypeCode;
   const room = typeof rooms !== "undefined" ? rooms.find(item => item.id === roomId) : null;
-  const destination = normalizeDestination(overrides.destination || params.get("destination") || room?.location || stored.destination || "Tất cả địa điểm");
-  const duration = overrides.packageLabel || overrides.duration || params.get("duration") || stored.duration || "3 tiếng";
-  const nights = Math.max(1, Number(overrides.nights || params.get("nights") || stored.nights || 1));
-  const adults = Number(overrides.adults ?? params.get("adults") ?? stored.adults ?? 2);
-  const children = Number(overrides.children ?? params.get("children") ?? stored.children ?? 0);
-  const checkinAt = overrides.checkinAt || params.get("checkin") || params.get("checkinAt") || stored.checkinAt || "";
-  const date = overrides.date || (/^\d{4}-\d{2}-\d{2}T/.test(checkinAt) ? checkinAt.slice(0, 10) : "") || params.get("date") || stored.date || toDateInputValue();
-  const guests = `${Math.max(1, adults)} người lớn${children > 0 ? `, ${children} trẻ em` : ""}`;
-  const durationText = duration === "Ngày" ? `Theo ngày · ${nights} đêm` : duration;
-  const checkout = checkinAt ? bookingCheckoutDate(checkinAt, duration, nights, room?.id || roomId) : null;
-  const checkoutAt = checkout ? toDatetimeLocalValue(checkout) : "";
-  const schedule = checkinAt && checkoutAt
-    ? `${formatContactMoment(checkinAt)} → ${formatContactMoment(checkoutAt)}`
-    : `${formatContactDate(date)} · chưa chọn giờ`;
+  const destination = room?.location || state.branchId || "Tất cả địa điểm";
+  const packageConfig = BOOKING_PACKAGES[state.packageCode];
+  const date = state.checkinAt?.slice(0, 10) || "";
+  const guests = `${state.adults} người lớn${state.children > 0 ? `, ${state.children} trẻ em` : ""}`;
+  const durationText = state.packageCode === "day" ? `${packageConfig.display} · ${state.nights} đêm` : packageConfig.display;
+  const schedule = bookingHasExactInterval(state)
+    ? `${formatContactMoment(state.checkinAt)} → ${formatContactMoment(state.checkoutAt)}`
+    : "Chưa chọn ngày và giờ nhận";
 
   const context = {
     room: room ? `${room.name} (${room.id})` : (roomId ? `mã ${roomId}` : "chưa chọn phòng cụ thể"),
     roomId: room?.id || roomId || "chưa chọn",
+    branchId: state.branchId,
     destination: destination === "all" ? "Tất cả địa điểm" : destination,
     date,
-    dateLabel: formatContactDate(date),
-    checkinAt,
-    checkoutAt,
-    time: formatContactTime(checkinAt),
+    dateLabel: date ? formatContactDate(date) : "chưa chọn ngày",
+    checkinAt: state.checkinAt,
+    checkoutAt: state.checkoutAt,
+    time: formatContactTime(state.checkinAt),
     schedule,
-    packageLabel: duration,
+    packageCode: state.packageCode,
+    packageLabel: packageConfig.label,
     duration: durationText,
-    nights,
-    adults,
-    children,
+    nights: state.nights,
+    adults: state.adults,
+    children: state.children,
     guests,
-    url: overrides.url || window.location.href
+    url: overrides.url || window.location.href,
+    bookingState: state
   };
   context.url = buildContactContextUrl(context);
   return context;
@@ -1516,13 +1806,13 @@ const ensureContactModal = () => {
 
   document.body.insertAdjacentHTML("beforeend", `
     <div class="contact-modal-backdrop" id="contactModalBackdrop" aria-hidden="true" onclick="window.uniteCloseContactModal?.()"></div>
-    <section class="contact-modal" id="contactModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="contactModalTitle" style="max-width: 450px;">
+    <section class="contact-modal booking-sheet" id="contactModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="contactModalTitle">
       <button class="contact-modal-close" type="button" data-contact-modal-close aria-label="Đóng" onclick="window.uniteCloseContactModal?.()">×</button>
       
       <div class="contact-modal-head" style="margin-bottom: 16px;">
         <span>Yêu cầu đặt phòng</span>
         <h2 id="contactModalTitle">Đặt ngay trên web</h2>
-        <p id="contactModalSummary" style="color:var(--text-gray, #666); font-size:14px; margin-top:4px;">Điền thông tin để Unite xác nhận lịch trống và giữ phòng cho bạn.</p>
+        <p id="contactModalSummary">Điền thông tin một lần để Unite giữ phòng cho bạn trong 30 phút.</p>
         <div id="contactModalDetails" style="margin-top:12px; display:flex; flex-wrap:wrap; gap:6px;"></div>
       </div>
       
@@ -1536,26 +1826,45 @@ const ensureContactModal = () => {
           <input type="tel" name="phone" autocomplete="tel" inputmode="tel" minlength="8" maxlength="20" placeholder="Ví dụ: 0902 097 755 hoặc +84..." required>
         </label>
         <div class="customer-booking-time-grid">
-          <label class="customer-booking-field">
+          <div class="customer-booking-field customer-booking-picker-field">
             <span>Ngày & giờ nhận *</span>
-            <input type="datetime-local" name="checkinAt" required>
-          </label>
+            <input type="hidden" name="checkinAt">
+            <button class="customer-datetime-trigger" id="customerCheckinPickerButton" type="button" aria-expanded="false">
+              <strong id="customerCheckinPickerText">Chọn ngày và giờ nhận</strong>
+              <small>Giờ Việt Nam · định dạng 24 giờ</small>
+            </button>
+            <div class="customer-datetime-popover" id="customerBookingPicker" hidden>
+              <div class="customer-picker-toolbar">
+                <button type="button" data-customer-month="-1" aria-label="Tháng trước">‹</button>
+                <strong id="customerPickerMonth"></strong>
+                <button type="button" data-customer-month="1" aria-label="Tháng sau">›</button>
+              </div>
+              <div class="customer-picker-calendar" id="customerPickerCalendar"></div>
+              <div class="customer-picker-time-wrap">
+                <strong>Giờ nhận</strong>
+                <div class="booking-time-options" id="customerPickerTimes"></div>
+              </div>
+            </div>
+          </div>
           <label class="customer-booking-field">
             <span>Trả phòng dự kiến</span>
             <input type="text" name="checkoutPreview" readonly aria-readonly="true">
           </label>
         </div>
         <p class="customer-booking-time-hint" id="customerBookingTimeHint" aria-live="polite"></p>
+        <div class="public-availability-state" id="customerAvailabilityState" aria-live="polite"></div>
+        <div class="public-alternatives" id="customerBookingAlternatives" aria-live="polite"></div>
+        <p class="customer-booking-error" id="customerBookingError" role="alert" hidden></p>
         <label class="customer-booking-field">
           <span>Ghi chú (nếu có)</span>
           <textarea name="customerNote" rows="2" maxlength="500" placeholder="Giờ đến dự kiến, setup hoặc yêu cầu cần CSKH hỗ trợ..."></textarea>
         </label>
-        <button type="submit" class="btn primary" id="submitCustomerBookingBtn" style="margin-top: 8px; padding: 14px; font-size: 16px; border-radius: 8px;">Gửi yêu cầu đặt phòng</button>
+        <button type="submit" class="btn primary" id="submitCustomerBookingBtn">Giữ phòng 30 phút</button>
       </form>
       
       <div id="bookingSuccessMsg" style="display: none; background: #e8f5e9; color: #2e7d32; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
-        <h3 style="margin: 0 0 8px 0; font-size: 16px;">🎉 Đã gửi yêu cầu!</h3>
-        <p id="bookingSuccessCopy" style="margin: 0; font-size: 14px; line-height: 1.5;">Đội ngũ Unite sẽ liên hệ qua Zalo/WhatsApp trong ít phút để xác nhận lịch và hỗ trợ giữ phòng.</p>
+        <h3 style="margin: 0 0 8px 0; font-size: 16px;">🎉 Đã giữ phòng!</h3>
+        <p id="bookingSuccessCopy" style="margin: 0; font-size: 14px; line-height: 1.5;">Đội ngũ Unite sẽ liên hệ qua Zalo/WhatsApp trong ít phút để hỗ trợ xác nhận.</p>
       </div>
 
       <div style="border-top: 1px solid #eaeaea; margin: 0 -24px; padding: 24px 24px 0;">
@@ -1573,22 +1882,31 @@ const ensureContactModal = () => {
   $("#customerBookingForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("#submitCustomerBookingBtn");
+    const errorBox = $("#customerBookingError");
+    if (errorBox) errorBox.hidden = true;
     btn.disabled = true;
-    btn.textContent = "Đang gửi...";
+    btn.textContent = "Đang giữ phòng...";
     try {
       const result = await window.submitCustomerBookingAsync(window.currentBookingContext, e.target);
       $("#customerBookingForm").style.display = "none";
       $("#bookingSuccessMsg").style.display = "block";
       const successCopy = $("#bookingSuccessCopy");
       if (successCopy) {
+        const holdText = result?.holdExpiresAt ? ` Phòng được giữ đến ${formatContactMoment(result.holdExpiresAt)}.` : "";
         successCopy.textContent = result?.publicCode
-          ? `Mã yêu cầu ${result.publicCode}. Unite sẽ liên hệ qua Zalo/WhatsApp để xác nhận lịch và phòng cụ thể.`
-          : "Unite sẽ liên hệ qua Zalo/WhatsApp để xác nhận lịch và phòng cụ thể.";
+          ? `Mã đặt phòng ${result.publicCode}.${holdText} Unite sẽ liên hệ qua Zalo/WhatsApp để hỗ trợ xác nhận.`
+          : `Phòng đã được giữ.${holdText} Unite sẽ liên hệ qua Zalo/WhatsApp để hỗ trợ xác nhận.`;
       }
     } catch (err) {
-      alert("Có lỗi xảy ra: " + err.message);
+      if (errorBox) {
+        errorBox.textContent = friendlyAvailabilityError(err);
+        errorBox.hidden = false;
+      }
+      if (err?.code === "ROOM_UNAVAILABLE") {
+        window.refreshCustomerAvailability?.({ loadAlternatives: true });
+      }
       btn.disabled = false;
-      btn.textContent = "Gửi yêu cầu đặt phòng";
+      btn.textContent = "Giữ phòng 30 phút";
     }
   });
 
@@ -1596,93 +1914,65 @@ const ensureContactModal = () => {
 };
 
 window.submitCustomerBookingAsync = async (context, form) => {
-  const cfg = window.UNITE_SUPABASE_CONFIG || {};
-  const baseUrl = (cfg.url || "").replace(/\/rest\/v1\/?$/, "").replace(/\/$/, "");
-  const anonKey = cfg.anonKey || cfg.publishableKey;
-  if (!baseUrl || !anonKey) throw new Error("Hệ thống chưa cấu hình kết nối.");
-
   const customerName = form.customerName.value.trim();
   const contact = form.phone.value.trim();
-  const checkin = bookingAsDate(form.checkinAt.value);
-  const packageLabel = context.packageLabel || context.duration || "3 tiếng";
-  const checkout = bookingCheckoutDate(form.checkinAt.value, packageLabel, context.nights, context.roomId);
+  const state = normalizeBookingState({
+    ...(context?.bookingState || {}),
+    roomTypeCode: context?.roomId,
+    packageCode: context?.packageCode || context?.packageLabel,
+    checkinAt: form.checkinAt.value,
+    nights: context?.nights,
+    adults: context?.adults,
+    children: context?.children
+  });
   if (!customerName || !contact) throw new Error("Vui lòng nhập họ tên và số Zalo/WhatsApp.");
-  if (Number.isNaN(checkin.getTime()) || !checkout) throw new Error("Ngày giờ nhận phòng chưa hợp lệ.");
-  if (checkin.getTime() < Date.now() - 5 * 60_000) throw new Error("Giờ nhận phòng không thể nằm trong quá khứ.");
-
-  const requestHeaders = {
-    apikey: anonKey,
-    Authorization: `Bearer ${anonKey}`,
-    "Content-Type": "application/json"
-  };
-  const roomCode = context.roomId && context.roomId !== "chưa chọn" ? context.roomId : "";
-  let roomType = null;
-  if (roomCode) {
-    const roomQuery = new URLSearchParams({ select: "id,branch_id,code,name", code: `eq.${roomCode}`, limit: "1" });
-    const roomResponse = await fetch(`${baseUrl}/rest/v1/room_types?${roomQuery.toString()}`, { headers: requestHeaders });
-    if (roomResponse.ok) roomType = (await roomResponse.json())?.[0] || null;
+  if (!state.roomTypeCode) {
+    const error = new Error("Vui lòng chọn layout trước khi giữ phòng.");
+    error.code = "VALIDATION_ERROR";
+    throw error;
+  }
+  if (!bookingHasExactInterval(state)) {
+    const error = new Error("Vui lòng chọn ngày và giờ nhận phòng.");
+    error.code = "VALIDATION_ERROR";
+    throw error;
+  }
+  const checkin = bookingAsDate(state.checkinAt);
+  if (checkin.getTime() < Date.now() - 5 * 60_000) {
+    const error = new Error("Giờ nhận phòng không thể nằm trong quá khứ.");
+    error.code = "VALIDATION_ERROR";
+    throw error;
   }
 
-  const payload = {
-    customer_name: customerName,
-    customer_phone: contact,
-    customer_note: form.customerNote.value.trim() || null,
-    status: "new",
-    source_code: "website",
-    branch_id: roomType?.branch_id || null,
-    room_type_id: roomType?.id || null,
-    package_label: packageLabel,
-    guests: Math.max(1, Number(context.adults || 1) + Math.max(0, Number(context.children || 0))),
-    internal_note: "Yêu cầu web V15.4 | Phòng: " + context.room + " | Chi nhánh: " + context.destination + " | Khách: " + context.guests,
-    checkin_at: checkin.toISOString(),
-    checkout_at: checkout.toISOString()
-  };
-
-  const rpcPayload = {
+  const requestId = form.dataset.publicRequestId || publicRequestId();
+  form.dataset.publicRequestId = requestId;
+  const result = await publicRpc("create_public_booking_v2", {
+    p_public_request_id: requestId,
     p_customer_name: customerName,
     p_contact: contact,
     p_checkin_at: checkin.toISOString(),
-    p_checkout_at: checkout.toISOString(),
-    p_room_code: roomCode || null,
-    p_package_label: packageLabel,
-    p_guests: payload.guests,
-    p_customer_note: payload.customer_note
+    p_checkout_at: bookingAsDate(state.checkoutAt).toISOString(),
+    p_room_code: state.roomTypeCode,
+    p_package_code: state.packageCode,
+    p_adults: state.adults,
+    p_children: state.children,
+    p_nights: state.nights,
+    p_customer_note: form.customerNote.value.trim() || null
+  });
+  const row = Array.isArray(result) ? result[0] : result;
+  if (!row?.ok) {
+    const error = new Error(friendlyAvailabilityError({ code: row?.error_code }));
+    error.code = row?.error_code || "REQUEST_FAILED";
+    throw error;
+  }
+  persistBookingState(state, { replaceUrl: true });
+  return {
+    publicCode: row.public_code || "",
+    status: row.status || "holding",
+    holdExpiresAt: row.hold_expires_at || "",
+    remaining: Number(row.remaining || 0),
+    checkinAt: state.checkinAt,
+    checkoutAt: state.checkoutAt
   };
-  const rpcResponse = await fetch(`${baseUrl}/rest/v1/rpc/create_public_booking_request`, {
-    method: "POST",
-    headers: requestHeaders,
-    body: JSON.stringify(rpcPayload)
-  });
-
-  if (rpcResponse.ok) {
-    const result = await rpcResponse.json();
-    const row = Array.isArray(result) ? result[0] : result;
-    return { publicCode: row?.public_code || row?.publicCode || "", checkinAt: payload.checkin_at, checkoutAt: payload.checkout_at };
-  }
-
-  const rpcErrorText = await rpcResponse.text();
-  let rpcMissing = rpcResponse.status === 404;
-  try { rpcMissing ||= JSON.parse(rpcErrorText)?.code === "PGRST202"; } catch {}
-  if (!rpcMissing) throw new Error(rpcErrorText || "Không gửi được yêu cầu đặt phòng.");
-
-  // Tương thích deployment V15 hiện tại. Sau khi chạy migration V15.4, RPC phía trên là đường chính an toàn hơn.
-  const directResponse = await fetch(`${baseUrl}/rest/v1/bookings?select=public_code`, {
-    method: "POST",
-    headers: { ...requestHeaders, Prefer: "return=representation" },
-    body: JSON.stringify(payload)
-  });
-  if (!directResponse.ok) {
-    const text = await directResponse.text();
-    let directErrorCode = "";
-    try { directErrorCode = JSON.parse(text)?.code || ""; } catch {}
-    if ([401, 403].includes(directResponse.status) || directErrorCode === "42501") {
-      console.warn("Public booking fallback bị Supabase RLS từ chối; cần chạy migration V15.4.", text);
-      throw new Error("Kênh đặt phòng trực tuyến đang được cập nhật. Yêu cầu này chưa được gửi; vui lòng nhắn Zalo/WhatsApp để CSKH giữ lịch giúp bạn.");
-    }
-    throw new Error(text || directResponse.statusText);
-  }
-  const directRows = await directResponse.json();
-  return { publicCode: directRows?.[0]?.public_code || "", checkinAt: payload.checkin_at, checkoutAt: payload.checkout_at };
 };
 
 const openContactModal = (context = getContactContext()) => {
@@ -1690,23 +1980,33 @@ const openContactModal = (context = getContactContext()) => {
   const backdrop = $("#contactModalBackdrop");
   const summary = $("#contactModalSummary");
   const grid = $("#contactModalChannels");
-  
-  const destStr = (context.destination || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-  const branchChannelKey = destStr.includes("phan tay ho")
-    ? "tay ho"
-    : destStr.includes("le van sy") || destStr.includes("le van si")
-      ? "le van sy"
-      : "";
-  const channels = enabledContactChannels().filter(ch => {
-    const lbl = (ch.label || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (destStr && destStr !== "tat ca dia diem") {
-      if (lbl.includes("fanpage") && !lbl.includes("chinh") && lbl !== "fanpage") {
-        return Boolean(branchChannelKey && lbl.includes(branchChannelKey));
-      }
-    }
-    return true;
+  let liveState = normalizeBookingState(context.bookingState || {
+    branchId: context.branchId || context.destination,
+    roomTypeCode: context.roomId,
+    packageCode: context.packageCode || context.packageLabel,
+    checkinAt: context.checkinAt,
+    nights: context.nights,
+    adults: context.adults,
+    children: context.children
   });
-  
+  let pickerMonth = bookingAsDate(liveState.checkinAt || `${bookingDateKey()}T00:00`);
+  pickerMonth = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), 1);
+  let selectedDate = liveState.checkinAt?.slice(0, 10) || "";
+  let selectedTime = bookingTimeKey(liveState.checkinAt) || BOOKING_PACKAGES[liveState.packageCode].defaultTime;
+  let availabilityAbort = null;
+
+  const channelsForContext = liveContext => {
+    const destStr = (liveContext.destination || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    const branchKey = destStr.includes("phan tay ho") ? "tay ho" : destStr.includes("le van sy") || destStr.includes("le van si") ? "le van sy" : "";
+    return enabledContactChannels().filter(channel => {
+      const label = (channel.label || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (destStr && destStr !== "tat ca dia diem" && label.includes("fanpage") && !label.includes("chinh") && label !== "fanpage") {
+        return Boolean(branchKey && label.includes(branchKey));
+      }
+      return true;
+    });
+  };
+
   const details = $("#contactModalDetails");
   const renderModalContext = liveContext => {
     window.currentBookingContext = liveContext;
@@ -1722,6 +2022,7 @@ const openContactModal = (context = getContactContext()) => {
     }
 
     if (grid) {
+      const channels = channelsForContext(liveContext);
       grid.innerHTML = channels.length
         ? channels.map(channel => contactChannelHTML(channel, liveContext, "contact-modal-channel")).join("")
         : `
@@ -1732,55 +2033,177 @@ const openContactModal = (context = getContactContext()) => {
         `;
     }
   };
-  renderModalContext(context);
 
   const bookingForm = $("#customerBookingForm");
   bookingForm.style.display = "flex";
   bookingForm.reset();
+  delete bookingForm.dataset.publicRequestId;
   $("#bookingSuccessMsg").style.display = "none";
+  const errorBox = $("#customerBookingError");
+  if (errorBox) errorBox.hidden = true;
   const checkinInput = bookingForm.checkinAt;
   const checkoutPreview = bookingForm.checkoutPreview;
   const timeHint = $("#customerBookingTimeHint");
-  const syncCheckoutPreview = () => {
-    const liveContext = getContactContext({
-      ...context,
-      date: checkinInput.value?.slice(0, 10) || context.date,
-      checkinAt: checkinInput.value
+  const picker = $("#customerBookingPicker");
+  const pickerButton = $("#customerCheckinPickerButton");
+  const pickerText = $("#customerCheckinPickerText");
+  const pickerCalendar = $("#customerPickerCalendar");
+  const pickerTimes = $("#customerPickerTimes");
+  const pickerMonthLabel = $("#customerPickerMonth");
+  const availabilityBox = $("#customerAvailabilityState");
+  const alternativesBox = $("#customerBookingAlternatives");
+  const submitButton = $("#submitCustomerBookingBtn");
+
+  const renderAlternatives = alternatives => {
+    if (!alternativesBox) return;
+    alternativesBox.innerHTML = alternatives.length ? `
+      <strong>Lịch gần nhất còn phòng</strong>
+      <div>${alternatives.map((item, index) => `
+        <button type="button" data-booking-alternative="${index}">
+          <span>${item.roomCode === liveState.roomTypeCode ? "Cùng layout" : escapeHTML(item.roomName)}</span>
+          <strong>${formatContactMoment(item.checkinAt)} → ${formatContactTime(item.checkoutAt)}</strong>
+          <small>Còn ${item.remaining} phòng</small>
+        </button>
+      `).join("")}</div>
+    ` : "";
+    $$('[data-booking-alternative]', alternativesBox).forEach(button => {
+      button.addEventListener("click", () => {
+        const item = alternatives[Number(button.dataset.bookingAlternative)];
+        if (!item) return;
+        const alternativeRoom = rooms.find(room => room.id === item.roomCode);
+        liveState = normalizeBookingState({
+          ...liveState,
+          branchId: alternativeRoom?.branchId || alternativeRoom?.location || liveState.branchId,
+          roomTypeCode: item.roomCode,
+          checkinAt: item.checkinAt
+        });
+        selectedDate = liveState.checkinAt.slice(0, 10);
+        selectedTime = bookingTimeKey(liveState.checkinAt);
+        pickerMonth = new Date(bookingAsDate(`${selectedDate}T00:00`).getFullYear(), bookingAsDate(`${selectedDate}T00:00`).getMonth(), 1);
+        syncView({ refreshAvailability: true });
+      });
     });
-    const checkout = bookingCheckoutDate(checkinInput.value, liveContext.packageLabel || liveContext.duration, liveContext.nights, liveContext.roomId);
-    if (!checkout) {
-      checkoutPreview.value = "Chọn giờ nhận trước";
-      if (timeHint) timeHint.textContent = "Chọn đúng giờ bạn muốn nhận phòng để CSKH kiểm tra lịch.";
-      renderModalContext(liveContext);
+  };
+
+  const refreshAvailability = async ({ loadAlternatives = false } = {}) => {
+    availabilityAbort?.abort();
+    availabilityAbort = new AbortController();
+    renderAlternatives([]);
+    if (!bookingHasExactInterval(liveState)) {
+      availabilityBox.className = "public-availability-state is-pending";
+      availabilityBox.textContent = "Chọn đủ ngày và giờ để xem phòng còn trống.";
+      submitButton.disabled = true;
       return;
     }
-    checkoutPreview.value = new Intl.DateTimeFormat("vi-VN", {
-      timeZone: BOOKING_TIME_ZONE,
-      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
-    }).format(checkout);
-    if (timeHint) {
-      const hours = bookingPackageHours(liveContext.packageLabel || liveContext.duration, liveContext.nights, liveContext.roomId);
-      timeHint.textContent = `Gói ${liveContext.duration || liveContext.packageLabel} · ${hours} giờ. Giờ trả được tính tự động và CSKH sẽ xác nhận lại.`;
+    if (!liveState.roomTypeCode) {
+      availabilityBox.className = "public-availability-state is-pending";
+      availabilityBox.textContent = "Vui lòng chọn một layout trước khi giữ phòng.";
+      submitButton.disabled = true;
+      return;
     }
-    renderModalContext(liveContext);
+    availabilityBox.className = "public-availability-state is-loading";
+    availabilityBox.textContent = "Đang kiểm tra lịch phòng...";
+    submitButton.disabled = true;
+    try {
+      const rows = await publicAvailability(liveState, liveState.roomTypeCode, { signal: availabilityAbort.signal });
+      const row = rows.find(item => item.roomCode === liveState.roomTypeCode) || rows[0];
+      if (row?.remaining > 0) {
+        availabilityBox.className = "public-availability-state is-available";
+        availabilityBox.textContent = `Còn ${row.remaining} phòng trong khung giờ này · giữ tự động 30 phút sau khi gửi.`;
+        submitButton.disabled = false;
+        return;
+      }
+      availabilityBox.className = "public-availability-state is-full";
+      availabilityBox.textContent = "Hết phòng trong khung giờ này.";
+      submitButton.disabled = true;
+      if (loadAlternatives || row) renderAlternatives(await publicAlternatives(liveState, liveState.roomTypeCode, { signal: availabilityAbort.signal }));
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      availabilityBox.className = "public-availability-state is-unverified";
+      availabilityBox.textContent = "Chưa xác minh được phòng trống trực tuyến. Bạn vẫn có thể thử gửi để hệ thống kiểm tra lại.";
+      submitButton.disabled = false;
+    }
   };
-  checkinInput.min = toDatetimeLocalValue(new Date());
-  checkinInput.value = defaultBookingCheckin(context);
-  checkinInput.oninput = syncCheckoutPreview;
-  checkinInput.onchange = syncCheckoutPreview;
-  syncCheckoutPreview();
+  window.refreshCustomerAvailability = refreshAvailability;
+
+  const renderPicker = () => {
+    const todayKey = bookingDateKey();
+    const year = pickerMonth.getFullYear();
+    const month = pickerMonth.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const blanks = Array.from({ length: (pickerMonth.getDay() + 6) % 7 }, () => "<span></span>").join("");
+    pickerMonthLabel.textContent = new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric", timeZone: BOOKING_TIME_ZONE }).format(pickerMonth);
+    pickerCalendar.innerHTML = `
+      <div class="booking-picker-weekdays"><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span></div>
+      <div class="booking-picker-days">${blanks}${Array.from({ length: daysInMonth }, (_, index) => {
+        const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`;
+        return `<button type="button" data-customer-date="${key}" class="${key === selectedDate ? "is-selected" : ""}" ${key < todayKey ? "disabled" : ""}>${index + 1}</button>`;
+      }).join("")}</div>`;
+    const nowThreshold = Date.now() + 30 * 60_000;
+    pickerTimes.innerHTML = bookingTimeOptions().map(time => {
+      const candidate = selectedDate ? bookingAsDate(bookingLocalIso(selectedDate, time)) : null;
+      const disabled = !selectedDate || Number.isNaN(candidate?.getTime()) || candidate.getTime() <= nowThreshold;
+      return `<button type="button" data-customer-time="${time}" class="${time === bookingTimeKey(liveState.checkinAt) ? "is-selected" : ""}" ${disabled ? "disabled" : ""}>${time}</button>`;
+    }).join("");
+    $$('[data-customer-date]', pickerCalendar).forEach(button => button.addEventListener("click", () => {
+      selectedDate = button.dataset.customerDate;
+      const candidate = bookingAsDate(bookingLocalIso(selectedDate, selectedTime));
+      liveState = normalizeBookingState({ ...liveState, checkinAt: candidate.getTime() > nowThreshold ? bookingLocalIso(selectedDate, selectedTime) : "" });
+      if (!liveState.checkinAt) selectedTime = "";
+      syncView({ refreshAvailability: Boolean(liveState.checkinAt) });
+    }));
+    $$('[data-customer-time]', pickerTimes).forEach(button => button.addEventListener("click", () => {
+      selectedTime = button.dataset.customerTime;
+      liveState = normalizeBookingState({ ...liveState, checkinAt: bookingLocalIso(selectedDate, selectedTime) });
+      syncView({ refreshAvailability: true });
+      picker.hidden = true;
+      pickerButton.setAttribute("aria-expanded", "false");
+    }));
+  };
+
+  const syncView = ({ refreshAvailability: shouldRefresh = false } = {}) => {
+    checkinInput.value = liveState.checkinAt;
+    pickerText.textContent = liveState.checkinAt ? formatContactMoment(liveState.checkinAt) : "Chọn ngày và giờ nhận";
+    checkoutPreview.value = liveState.checkoutAt ? formatContactMoment(liveState.checkoutAt) : "Tự tính sau khi chọn giờ nhận";
+    const packageConfig = BOOKING_PACKAGES[liveState.packageCode];
+    const hours = packageConfig.code === "day" ? 22 + (liveState.nights - 1) * 24 : packageConfig.hours;
+    timeHint.textContent = liveState.checkinAt
+      ? `${packageConfig.display}${packageConfig.code === "day" ? ` · ${liveState.nights} đêm` : ""} · ${hours} giờ. Giờ trả được tính tự động.`
+      : "Chọn đúng thời gian bạn muốn nhận phòng; hệ thống không tự đoán giờ đã qua.";
+    const liveContext = getContactContext({ ...context, roomId: liveState.roomTypeCode, branchId: liveState.branchId, packageCode: liveState.packageCode, checkinAt: liveState.checkinAt, nights: liveState.nights, adults: liveState.adults, children: liveState.children });
+    liveContext.bookingState = liveState;
+    renderModalContext(liveContext);
+    persistBookingState(liveState, { replaceUrl: true });
+    renderPicker();
+    if (shouldRefresh) refreshAvailability({ loadAlternatives: true });
+  };
+
+  pickerButton.onclick = () => {
+    picker.hidden = !picker.hidden;
+    pickerButton.setAttribute("aria-expanded", String(!picker.hidden));
+  };
+  $$('[data-customer-month]', picker).forEach(button => button.onclick = () => {
+    const next = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth() + Number(button.dataset.customerMonth), 1);
+    const currentMonth = new Date(bookingAsDate(`${bookingDateKey()}T00:00`).getFullYear(), bookingAsDate(`${bookingDateKey()}T00:00`).getMonth(), 1);
+    if (next < currentMonth) return;
+    pickerMonth = next;
+    renderPicker();
+  });
+  syncView();
+  refreshAvailability({ loadAlternatives: true });
   const btn = $("#submitCustomerBookingBtn");
   if (btn) {
-    btn.disabled = false;
-    btn.textContent = "Gửi yêu cầu đặt phòng";
+    btn.textContent = "Giữ phòng 30 phút";
   }
+
+  if (summary) summary.textContent = "Chọn lịch, nhập thông tin và giữ phòng trong một bước.";
 
   modal?.classList.add("open");
   backdrop?.classList.add("open");
   modal?.setAttribute("aria-hidden", "false");
   document.body.classList.add("contact-modal-open");
   applyLanguage(getStoredLanguage());
-  $("[data-contact-modal-close]", modal)?.focus();
+  window.setTimeout(() => bookingForm.customerName?.focus(), 60);
 };
 
 const initContactChannels = () => {
@@ -1993,19 +2416,19 @@ const roomDetailContent = (room) => {
       { label: "Sức chứa", value: "Tối đa 2 khách" },
       { label: "Số lượng", value: `${admin.inventory} phòng` },
       { label: "Trạng thái", value: statusLabels[admin.status] || "Đang mở" },
-      { label: "Khung giờ", value: "3h / 4h / 8h / Ngày" },
+      { label: "Khung giờ", value: "3h / 4h / Qua đêm / Ngày" },
       { label: "Check-in", value: "Theo lịch đã đặt" },
       { label: "Phụ thu trễ", value: "Từ 10 phút" }
     ],
     steps: [
-      { title: "Chọn gói", desc: "Chọn 3h, 4h, 8h hoặc ngày theo lịch cần nghỉ." },
+      { title: "Chọn gói", desc: "Chọn 3h, 4h, qua đêm hoặc ngày theo lịch cần nghỉ." },
       { title: "Nhắn mã phòng", desc: `Gửi mã ${room.id} để admin kiểm tra tình trạng phòng.` },
       { title: "Xác nhận", desc: "Unite gửi giá cuối, giờ nhận phòng và lưu ý thanh toán." },
       { title: "Nhận hướng dẫn", desc: "Khách nhận địa chỉ, cách vào phòng và nội quy cần biết." }
     ],
     faqs: [
       { q: "Phòng có phù hợp cho 2 người không?", a: "Có. Các phòng được thiết kế cho tối đa 2 khách để giữ sự riêng tư và thoải mái." },
-      { q: "Có thể đặt theo giờ không?", a: "Có. Unite có các gói 3h, 4h, 8h và ngày; giá có thể thay đổi theo lịch thực tế." },
+      { q: "Có thể đặt theo giờ không?", a: "Có. Unite có các gói 3h, 4h, qua đêm và ngày; giá có thể thay đổi theo lịch thực tế." },
       { q: "Làm sao biết còn phòng?", a: "Khách gửi mã phòng và khung giờ mong muốn, admin sẽ xác nhận tình trạng trước khi chốt." },
       { q: "Có cần đọc nội quy trước không?", a: "Nên đọc trước phần nội quy để tránh phụ thu trễ giờ, vượt số khách hoặc phát sinh ngoài ý muốn." }
     ],
@@ -2122,7 +2545,7 @@ const renderHeroStack = () => {
 };
 
 const roomPreviewHTML = (room, index = 0) => `
-  <a class="layout-tile reveal-up" href="room.html?id=${room.id}" style="--delay:${index * 45}ms" aria-label="Xem chi tiết ${room.name}">
+  <a class="layout-tile reveal-up" href="${bookingUrl("room.html", readBookingState(), { branchId: room.branchId || room.location, roomTypeCode: room.id })}" style="--delay:${index * 45}ms" aria-label="Xem chi tiết ${room.name}">
     <div class="layout-thumb">
       ${imgTag(getMainImage(room), room.name)}
       <span>${room.chapter}</span>
@@ -2150,17 +2573,17 @@ const renderHomeRooms = () => {
   const leVanSi = $("#homeLeVanSi");
 
   if (nhieuTu) {
-    const data = rooms.filter(room => room.location === "Chi nhánh Nhiêu Tứ");
+    const data = rooms.filter(room => normalizeDestination(room.location) === "Chi nhánh Nhiêu Tứ");
     nhieuTu.innerHTML = data.map((room, index) => roomPreviewHTML(room, index)).join("");
   }
 
   if (phanTayHo) {
-    const data = rooms.filter(room => room.location === "Chi nhánh Phan Tây Hồ");
+    const data = rooms.filter(room => normalizeDestination(room.location) === "Chi nhánh Phan Tây Hồ");
     phanTayHo.innerHTML = data.map((room, index) => roomPreviewHTML(room, index)).join("");
   }
 
   if (leVanSi) {
-    const data = rooms.filter(room => room.location === "Chi nhánh Lê Văn Sĩ");
+    const data = rooms.filter(room => normalizeDestination(room.location) === "Chi nhánh Lê Văn Sĩ");
     leVanSi.innerHTML = data.map((room, index) => roomPreviewHTML(room, index)).join("");
   }
 
@@ -2170,7 +2593,7 @@ const renderHomeRooms = () => {
 
 const priceCompareHTML = (room, index = 0) => `
   <article class="price-row reveal-up" style="--delay:${index * 45}ms">
-    <a class="price-room" href="room.html?id=${room.id}">
+    <a class="price-room" href="${bookingUrl("room.html", readBookingState(), { branchId: room.branchId || room.location, roomTypeCode: room.id })}">
       <img src="${getMainImage(room)}" alt="${room.name}" loading="lazy" />
       ${promotionBadgeHTML(room)}
       <span>
@@ -2187,7 +2610,7 @@ const priceCompareHTML = (room, index = 0) => `
       <span><small>Ngày</small><strong>${getPrice(room, "Ngày")}</strong></span>
     </div>
 
-    <a class="btn soft small" href="room.html?id=${room.id}">Xem</a>
+    <a class="btn soft small" href="${bookingUrl("room.html", readBookingState(), { branchId: room.branchId || room.location, roomTypeCode: room.id })}">Xem</a>
   </article>
 `;
 
@@ -2289,18 +2712,16 @@ const bookingWidgetHTML = ({ className = "", buttonText = "Tìm phòng", note = 
         <small>${room ? `${room.id} · ${room.name}` : "Chọn khu vực lưu trú."}</small>
       </button>
       <div class="booking-popover destination-popover" data-booking-panel="destination">
-        <button type="button" data-destination="all">Tất cả địa điểm <small>7 layout đang mở</small></button>
-        <button type="button" data-destination="Chi nhánh Nhiêu Tứ">Chi nhánh Nhiêu Tứ <small>Gần Phan Xích Long</small></button>
-        <button type="button" data-destination="Chi nhánh Phan Tây Hồ">Chi nhánh Phan Tây Hồ <small>Yên tĩnh, riêng tư</small></button>
-        <button type="button" data-destination="Chi nhánh Lê Văn Sĩ">Chi nhánh Lê Văn Sĩ <small>Ấm, riêng tư, dễ di chuyển</small></button>
+        <button type="button" data-destination="all">Tất cả địa điểm <small>${rooms.length} layout đang mở</small></button>
+        ${[...new Set(rooms.map(item => item.location))].map(location => `<button type="button" data-destination="${escapeHTML(location)}">${escapeHTML(location)} <small>${rooms.filter(item => item.location === location).length} layout</small></button>`).join("")}
       </div>
     </div>
 
     <div class="booking-field" data-panel="dates">
       <button type="button" class="booking-trigger" aria-expanded="false">
         <span>Nhận phòng</span>
-        <strong id="bookingDateText">Hôm nay</strong>
-        <small id="bookingCheckoutText">Trả phòng theo gói đã chọn.</small>
+        <strong id="bookingDateText">Chọn ngày & giờ</strong>
+        <small id="bookingCheckoutText">Chọn chính xác để xem phòng trống.</small>
       </button>
       <div class="booking-popover date-popover" data-booking-panel="dates">
         <div class="calendar-toolbar">
@@ -2309,6 +2730,10 @@ const bookingWidgetHTML = ({ className = "", buttonText = "Tìm phòng", note = 
           <button type="button" id="calendarNext" aria-label="Tháng sau">›</button>
         </div>
         <div class="calendar-months" id="bookingCalendar"></div>
+        <div class="booking-time-picker">
+          <strong>Giờ nhận · 24 giờ</strong>
+          <div class="booking-time-options" id="bookingTimeOptions"></div>
+        </div>
       </div>
     </div>
 
@@ -2319,10 +2744,10 @@ const bookingWidgetHTML = ({ className = "", buttonText = "Tìm phòng", note = 
         <small>Linh hoạt cho nghỉ nhanh hoặc stay dài hơn.</small>
       </button>
       <div class="booking-popover duration-popover" data-booking-panel="duration">
-        <button type="button" data-duration="3 tiếng" class="active">3 giờ <small>Nghỉ nhanh, xem phim</small></button>
-        <button type="button" data-duration="4 tiếng">4 giờ <small>Thoải mái hơn một chút</small></button>
-        <button type="button" data-duration="Qua đêm">Qua đêm <small>Linh hoạt stay dài hơn</small></button>
-        <button type="button" data-duration="Ngày">Theo ngày <small>Ở lâu, check-in rõ lịch</small></button>
+        <button type="button" data-duration="3h" class="active">3 giờ <small>Mặc định 14:00 → 17:00</small></button>
+        <button type="button" data-duration="4h">4 giờ <small>Mặc định 14:00 → 18:00</small></button>
+        <button type="button" data-duration="night">Qua đêm <small>Mặc định 22:00 → 06:00</small></button>
+        <button type="button" data-duration="day">Theo ngày <small>Mặc định 14:00 → 12:00 hôm sau</small></button>
         <div class="night-stepper" id="bookingNightsWrap" hidden>
           <span><strong>Số đêm</strong><small>Cho đặt theo ngày hoặc nhiều ngày.</small></span>
           <div class="counter-control">
@@ -2366,7 +2791,7 @@ const bookingWidgetHTML = ({ className = "", buttonText = "Tìm phòng", note = 
   ${note ? `<div class="booking-result-note detail-booking-note" id="bookingResultNote" aria-live="polite">${note}</div>` : ""}
 `;
 
-const initHomeBookingWidget = () => {
+const initLegacyHomeBookingWidget = () => {
   const bar = $("#homeBookingBar");
   const calendar = $("#bookingCalendar");
   if (!bar || !calendar) return;
@@ -2705,7 +3130,212 @@ const initHomeBookingWidget = () => {
   renderCalendar();
 };
 
-const initSmartBookingDock = () => {
+const initHomeBookingWidget = () => {
+  const bar = $("#homeBookingBar");
+  const calendar = $("#bookingCalendar");
+  if (!bar || !calendar || bar.dataset.bookingV2Ready === "1") return;
+  bar.dataset.bookingV2Ready = "1";
+  const fixedRoom = bar.dataset.roomId ? rooms.find(room => room.id === bar.dataset.roomId) : null;
+  let state = readBookingState({
+    roomTypeCode: bar.dataset.roomId || undefined,
+    branchId: fixedRoom?.branchId || fixedRoom?.location || bar.dataset.defaultDestination || undefined
+  });
+  let selectedDate = state.checkinAt?.slice(0, 10) || "";
+  let selectedTime = bookingTimeKey(state.checkinAt) || BOOKING_PACKAGES[state.packageCode].defaultTime;
+  const baseMonth = bookingAsDate(`${selectedDate || bookingDateKey()}T00:00`);
+  let calendarMonth = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1);
+  let availabilityAbort = null;
+
+  const datePopover = $("[data-booking-panel='dates']", bar);
+  let timeOptions = $("#bookingTimeOptions", bar);
+  if (!timeOptions) {
+    datePopover?.insertAdjacentHTML("beforeend", `<div class="booking-time-picker"><strong>Giờ nhận · 24 giờ</strong><div class="booking-time-options" id="bookingTimeOptions"></div></div>`);
+    timeOptions = $("#bookingTimeOptions", bar);
+  }
+
+  const destinationPopover = $("[data-booking-panel='destination']", bar);
+  if (destinationPopover) {
+    const branchMap = new Map();
+    rooms.forEach(room => branchMap.set(String(room.branchId || room.location), room.location));
+    destinationPopover.innerHTML = `
+      <button type="button" data-destination="all">Tất cả địa điểm <small>${rooms.length} layout đang mở</small></button>
+      ${[...branchMap].map(([value, label]) => `<button type="button" data-destination="${escapeHTML(value)}">${escapeHTML(label)} <small>${rooms.filter(room => String(room.branchId || room.location) === value).length} layout</small></button>`).join("")}
+    `;
+  }
+
+  $$('[data-duration]', bar).forEach(button => {
+    button.dataset.duration = normalizeBookingPackageCode(button.dataset.duration);
+    const config = BOOKING_PACKAGES[button.dataset.duration];
+    const small = $("small", button);
+    if (small) small.textContent = ({ "3h": "Mặc định 14:00 → 17:00", "4h": "Mặc định 14:00 → 18:00", night: "Mặc định 22:00 → 06:00", day: "Mặc định 14:00 → 12:00 hôm sau" })[config.code];
+  });
+
+  const closePanels = () => {
+    $$(".booking-field", bar).forEach(field => {
+      field.classList.remove("open");
+      $(".booking-trigger", field)?.setAttribute("aria-expanded", "false");
+    });
+  };
+  const openPanel = field => {
+    closePanels();
+    field?.classList.add("open");
+    $(".booking-trigger", field)?.setAttribute("aria-expanded", "true");
+  };
+  const branchLabel = () => {
+    if (state.branchId === "all") return "Tất cả địa điểm";
+    return rooms.find(room => String(room.branchId || room.location) === state.branchId)?.location || state.branchId;
+  };
+  const guestText = () => `${state.adults} người lớn${state.children ? `, ${state.children} trẻ em` : ""}`;
+
+  const renderCalendar = () => {
+    const todayKey = bookingDateKey();
+    calendar.innerHTML = [0, 1].map(offset => {
+      const monthDate = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + offset, 1);
+      const year = monthDate.getFullYear();
+      const month = monthDate.getMonth();
+      const blankCount = (monthDate.getDay() + 6) % 7;
+      const blanks = Array.from({ length: blankCount }, () => `<span class="calendar-day is-blank"></span>`).join("");
+      const days = Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, index) => {
+        const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(index + 1).padStart(2, "0")}`;
+        return `<button class="calendar-day ${key === selectedDate ? "is-selected" : ""} ${key === todayKey ? "is-today" : ""}" type="button" data-date="${key}" ${key < todayKey ? "disabled" : ""}>${String(index + 1).padStart(2, "0")}</button>`;
+      }).join("");
+      return `<section class="calendar-month"><h4>${new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric", timeZone: BOOKING_TIME_ZONE }).format(monthDate)}</h4><div class="calendar-weekdays"><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span></div><div class="calendar-grid">${blanks}${days}</div></section>`;
+    }).join("");
+    const nowThreshold = Date.now() + 30 * 60_000;
+    timeOptions.innerHTML = bookingTimeOptions().map(time => {
+      const candidate = selectedDate ? bookingAsDate(bookingLocalIso(selectedDate, time)) : null;
+      const disabled = !selectedDate || Number.isNaN(candidate?.getTime()) || candidate.getTime() <= nowThreshold;
+      return `<button type="button" data-booking-time="${time}" class="${time === bookingTimeKey(state.checkinAt) ? "is-selected" : ""}" ${disabled ? "disabled" : ""}>${time}</button>`;
+    }).join("");
+    const minMonth = new Date(bookingAsDate(`${todayKey}T00:00`).getFullYear(), bookingAsDate(`${todayKey}T00:00`).getMonth(), 1);
+    $("#calendarPrev", bar)?.toggleAttribute("disabled", calendarMonth <= minMonth);
+  };
+
+  const updateAvailabilityNote = async () => {
+    const note = $("#bookingResultNote");
+    if (!note) return;
+    availabilityAbort?.abort();
+    if (!bookingHasExactInterval(state)) {
+      note.textContent = "Chọn đủ ngày và giờ nhận để xem số phòng còn trống.";
+      return;
+    }
+    availabilityAbort = new AbortController();
+    note.textContent = "Đang kiểm tra phòng trống theo khung giờ...";
+    try {
+      const rows = await publicAvailability(state, fixedRoom?.id || null, { signal: availabilityAbort.signal });
+      const remaining = rows.reduce((sum, row) => sum + row.remaining, 0);
+      note.textContent = remaining > 0
+        ? `Còn ${remaining} phòng phù hợp từ ${formatContactMoment(state.checkinAt)} đến ${formatContactMoment(state.checkoutAt)}.`
+        : "Hết phòng trong khung giờ này. Mở danh sách để xem lịch gần nhất còn phòng.";
+    } catch (error) {
+      if (error?.name !== "AbortError") note.textContent = "Chưa xác minh được phòng trống trực tuyến; catalogue và giá tham khảo vẫn xem được.";
+    }
+  };
+
+  const updateSummary = ({ checkAvailability = false } = {}) => {
+    state = normalizeBookingState(state, fixedRoom);
+    bar._bookingState = state;
+    const packageConfig = BOOKING_PACKAGES[state.packageCode];
+    $("#bookingDestinationText", bar).textContent = fixedRoom?.location || branchLabel();
+    $("#bookingDurationText", bar).textContent = state.packageCode === "day" ? `${packageConfig.display} · ${state.nights} đêm` : packageConfig.display;
+    $("#bookingDateText", bar).textContent = state.checkinAt ? formatContactMoment(state.checkinAt) : "Chọn ngày & giờ";
+    $("#bookingCheckoutText", bar).textContent = state.checkoutAt ? `Trả ${formatContactMoment(state.checkoutAt)}` : "Chọn chính xác để xem phòng trống.";
+    $("#bookingGuestText", bar).textContent = guestText();
+    $("#bookingNightCount", bar).textContent = state.nights;
+    $("#bookingNightsWrap", bar).hidden = state.packageCode !== "day";
+    $$('[data-duration]', bar).forEach(button => button.classList.toggle("active", button.dataset.duration === state.packageCode));
+    $$('[data-destination]', bar).forEach(button => button.classList.toggle("active", button.dataset.destination === state.branchId));
+    const total = state.adults + state.children;
+    $("#adultCount", bar).textContent = state.adults;
+    $("#childCount", bar).textContent = state.children;
+    $$('[data-counter]', bar).forEach(button => {
+      const value = button.dataset.counter === "adults" ? state.adults : state.children;
+      button.disabled = Number(button.dataset.step) < 0 ? value <= (button.dataset.counter === "adults" ? 1 : 0) : total >= 2;
+    });
+    $$('[data-night-step]', bar).forEach(button => button.disabled = Number(button.dataset.nightStep) < 0 ? state.nights <= 1 : state.nights >= 30);
+    persistBookingState(state, { replaceUrl: true });
+    renderCalendar();
+    if (checkAvailability || !bookingHasExactInterval(state)) updateAvailabilityNote();
+  };
+
+  $$(".booking-field", bar).forEach(field => $(".booking-trigger", field)?.addEventListener("click", event => {
+    event.stopPropagation();
+    field.classList.contains("open") ? closePanels() : openPanel(field);
+  }));
+  $$('[data-destination]', bar).forEach(button => button.addEventListener("click", () => {
+    state = normalizeBookingState({ ...state, branchId: button.dataset.destination, roomTypeCode: fixedRoom?.id || "" });
+    updateSummary();
+    closePanels();
+  }));
+  $$('[data-duration]', bar).forEach(button => button.addEventListener("click", () => {
+    const packageCode = button.dataset.duration;
+    selectedTime = BOOKING_PACKAGES[packageCode].defaultTime;
+    let checkinAt = "";
+    if (selectedDate) {
+      const candidate = bookingAsDate(bookingLocalIso(selectedDate, selectedTime));
+      if (candidate.getTime() > Date.now() + 30 * 60_000) checkinAt = bookingLocalIso(selectedDate, selectedTime);
+    }
+    state = normalizeBookingState({ ...state, packageCode, checkinAt, nights: packageCode === "day" ? state.nights : 1 });
+    updateSummary({ checkAvailability: Boolean(checkinAt) });
+    openPanel($("[data-panel='dates']", bar));
+  }));
+  $$('[data-night-step]', bar).forEach(button => button.addEventListener("click", () => {
+    state = normalizeBookingState({ ...state, nights: state.nights + Number(button.dataset.nightStep) });
+    updateSummary({ checkAvailability: bookingHasExactInterval(state) });
+  }));
+  $$('[data-counter]', bar).forEach(button => button.addEventListener("click", () => {
+    const step = Number(button.dataset.step);
+    const next = { ...state };
+    if (button.dataset.counter === "adults") next.adults += step;
+    else next.children += step;
+    state = normalizeBookingState(next);
+    updateSummary({ checkAvailability: bookingHasExactInterval(state) });
+  }));
+  calendar.addEventListener("click", event => {
+    const button = event.target.closest("[data-date]");
+    if (!button || button.disabled) return;
+    selectedDate = button.dataset.date;
+    selectedTime = BOOKING_PACKAGES[state.packageCode].defaultTime;
+    const candidate = bookingAsDate(bookingLocalIso(selectedDate, selectedTime));
+    state = normalizeBookingState({ ...state, checkinAt: candidate.getTime() > Date.now() + 30 * 60_000 ? bookingLocalIso(selectedDate, selectedTime) : "" });
+    if (!state.checkinAt) selectedTime = "";
+    updateSummary({ checkAvailability: Boolean(state.checkinAt) });
+  });
+  timeOptions.addEventListener("click", event => {
+    const button = event.target.closest("[data-booking-time]");
+    if (!button || button.disabled || !selectedDate) return;
+    selectedTime = button.dataset.bookingTime;
+    state = normalizeBookingState({ ...state, checkinAt: bookingLocalIso(selectedDate, selectedTime) });
+    updateSummary({ checkAvailability: true });
+    closePanels();
+  });
+  $("#calendarPrev", bar)?.addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  $("#calendarNext", bar)?.addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+    renderCalendar();
+  });
+  $("#bookingSearchBtn", bar)?.addEventListener("click", () => {
+    if (!bookingHasExactInterval(state)) {
+      openPanel($("[data-panel='dates']", bar));
+      $("#bookingResultNote").textContent = "Vui lòng chọn ngày và giờ nhận trong tương lai.";
+      return;
+    }
+    closePanels();
+    if (fixedRoom) {
+      openContactModal(getContactContext({ ...state, roomId: fixedRoom.id, packageCode: state.packageCode, checkinAt: state.checkinAt }));
+      return;
+    }
+    window.location.href = bookingUrl("rooms.html", state);
+  });
+  document.addEventListener("click", event => { if (!bar.contains(event.target)) closePanels(); });
+  document.addEventListener("keydown", event => { if (event.key === "Escape") closePanels(); });
+  updateSummary({ checkAvailability: bookingHasExactInterval(state) });
+};
+
+const initLegacySmartBookingDock = () => {
   document.body.classList.add("has-smart-booking");
   if ($("#smartBookingDock")) return;
 
@@ -2944,19 +3574,50 @@ const initSmartBookingDock = () => {
   });
 };
 
+const initSmartBookingDock = () => {
+  if ($("#canonicalBookingDock") || document.body.dataset.page === "admin") return;
+  document.body.classList.add("has-canonical-booking");
+  document.body.insertAdjacentHTML("beforeend", `
+    <aside class="canonical-booking-dock" id="canonicalBookingDock" aria-label="Đặt phòng">
+      <span><small>Lịch của bạn</small><strong id="canonicalBookingSummary">Chọn ngày & giờ</strong></span>
+      <button class="btn primary" type="button" id="canonicalBookingAction">Đặt phòng</button>
+    </aside>
+  `);
+  const summary = $("#canonicalBookingSummary");
+  const action = $("#canonicalBookingAction");
+  const render = providedState => {
+    const state = normalizeBookingState(providedState || readBookingState());
+    const room = rooms.find(item => item.id === state.roomTypeCode);
+    summary.textContent = bookingHasExactInterval(state)
+      ? `${room?.name || "Chọn layout"} · ${formatContactMoment(state.checkinAt)} · ${BOOKING_PACKAGES[state.packageCode].display}`
+      : `${room?.name || "Chọn layout"} · Chọn ngày & giờ`;
+  };
+  render();
+  window.addEventListener("unite:booking-state", event => render(event.detail));
+  action.addEventListener("click", () => {
+    const state = readBookingState();
+    if (!bookingHasExactInterval(state)) {
+      $("#homeBookingBar")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => $("[data-panel='dates'] .booking-trigger")?.click(), 350);
+      return;
+    }
+    if (!state.roomTypeCode) {
+      window.location.href = bookingUrl("rooms.html", state);
+      return;
+    }
+    openContactModal(getContactContext({ ...state, roomId: state.roomTypeCode, packageCode: state.packageCode, checkinAt: state.checkinAt }));
+  });
+};
+
 const getRoomsSearchState = () => {
-  const params = new URLSearchParams(window.location.search);
-  const duration = params.get("duration") || "3 tiếng";
-  const nights = Math.min(30, Math.max(1, Number(params.get("nights") || 1)));
+  const booking = readBookingState();
   return {
-    destination: normalizeDestination(params.get("destination") || "all"),
-    date: params.get("date") || "",
-    checkout: params.get("checkout") || "",
-    duration,
-    nights: duration === "Ngày" ? nights : 1,
-    adults: Number(params.get("adults") || 2),
-    children: Number(params.get("children") || 0),
-    room: params.get("room") || "",
+    ...booking,
+    destination: booking.branchId,
+    date: booking.checkinAt?.slice(0, 10) || "",
+    checkout: booking.checkoutAt,
+    duration: BOOKING_PACKAGES[booking.packageCode].label,
+    room: booking.roomTypeCode,
     sort: $("#roomsSort")?.value || "recommended",
     filters: $$("[data-result-filter]:checked").map(input => input.dataset.resultFilter)
   };
@@ -2994,7 +3655,7 @@ const formatKPrice = (value) => {
   return `${value}k`;
 };
 
-const roomResultCardHTML = (room, state, index = 0) => {
+const legacyRoomResultCardHTML = (room, state, index = 0) => {
   const admin = getRoomAdmin(room);
   const basePrice = getPrice(room, state.duration);
   const baseNumericPrice = numericPrice(room, state.duration);
@@ -3052,7 +3713,70 @@ const roomResultCardHTML = (room, state, index = 0) => {
   `;
 };
 
-const renderRoomsResults = () => {
+const roomResultCardHTML = (room, state, index = 0, availability = null, alternatives = []) => {
+  const admin = getRoomAdmin(room);
+  const packageConfig = BOOKING_PACKAGES[state.packageCode];
+  const baseNumericPrice = numericPrice(room, packageConfig.label);
+  const isDayStay = state.packageCode === "day";
+  const price = isDayStay ? formatKPrice(baseNumericPrice * state.nights) : getPrice(room, packageConfig.label);
+  const priceSuffix = isDayStay ? `/ ${state.nights} đêm` : `/ ${packageConfig.display}`;
+  const exactInterval = bookingHasExactInterval(state);
+  const isFull = exactInterval && availability?.remaining === 0;
+  const isAvailable = exactInterval && availability?.remaining > 0;
+  const availabilityKnown = exactInterval && availability !== null;
+  const availabilityCopy = !exactInterval
+    ? "Chọn ngày & giờ để xem phòng trống"
+    : isAvailable
+      ? `Còn ${availability.remaining} phòng trong khung giờ này`
+      : isFull
+        ? "Hết phòng khung giờ này"
+        : "Chưa xác minh được lịch phòng";
+  const isFocused = state.roomTypeCode === room.id;
+  const roomState = normalizeBookingState({ ...state, branchId: room.branchId || room.location, roomTypeCode: room.id });
+  const detailHref = bookingUrl("room.html", roomState);
+  return `
+    <article class="room-result-card reveal-up ${isFocused ? "is-focused" : ""} ${isFull ? "is-full" : ""}" style="--delay:${index * 35}ms">
+      <a class="result-photo" href="${detailHref}">
+        ${imgTag(getMainImage(room), room.name)}
+        <span>${isFocused ? "Đang xem" : room.priceTier}</span>
+        ${promotionBadgeHTML(room)}
+      </a>
+      <div class="result-copy">
+        <span class="result-brand">Unite Staycation</span>
+        <h2>${room.name}</h2>
+        <p>${room.description}</p>
+        <div class="result-address"><span>⌖</span><small>${room.address}</small></div>
+        ${amenityBadgesHTML(room, 5)}
+        <div class="result-tags">
+          ${room.tags.slice(0, 4).map(tag => `<span>${tag}</span>`).join("")}
+          <span>${admin.category}</span>
+          <span>${admin.inventory} phòng · ${statusLabels[admin.status] || "Đang mở"}</span>
+        </div>
+        <div class="result-availability ${isAvailable ? "is-available" : isFull ? "is-full" : "is-pending"}">
+          <strong>${availabilityCopy}</strong>
+          ${availabilityKnown ? `<small>${formatContactTime(state.checkinAt)} → ${formatContactTime(state.checkoutAt)} · không hiển thị số phòng vật lý</small>` : ""}
+        </div>
+        ${isFull && alternatives.length ? `
+          <div class="result-alternatives">
+            <strong>Lịch gần nhất còn phòng</strong>
+            ${alternatives.map(item => {
+              const targetRoom = rooms.find(candidate => candidate.id === item.roomCode);
+              const targetState = normalizeBookingState({ ...state, branchId: targetRoom?.branchId || targetRoom?.location || state.branchId, roomTypeCode: item.roomCode, checkinAt: item.checkinAt });
+              return `<a href="${bookingUrl("room.html", targetState)}"><span>${item.roomCode === room.id ? "Cùng layout" : escapeHTML(item.roomName)}</span><b>${formatContactMoment(item.checkinAt)} → ${formatContactTime(item.checkoutAt)}</b><small>Còn ${item.remaining}</small></a>`;
+            }).join("")}
+          </div>
+        ` : ""}
+      </div>
+      <aside class="result-price">
+        <small>Chỉ từ</small><strong>${price}</strong><span>${priceSuffix}</span>
+        <em>${isDayStay ? "Giá tham khảo đã tính theo số đêm." : "Giá tham khảo theo gói đã chọn."}</em>
+        ${isFull ? `<button class="btn primary small" type="button" disabled>Hết phòng</button>` : `<a class="btn primary small" href="${detailHref}">${exactInterval ? "Đặt phòng" : "Xem chi tiết"}</a>`}
+      </aside>
+    </article>
+  `;
+};
+
+const legacyRenderRoomsResults = () => {
   const list = $("#roomsResultList");
   if (!list) return;
 
@@ -3117,12 +3841,82 @@ const renderRoomsResults = () => {
   applyLanguage(getStoredLanguage());
 };
 
+let roomsResultRenderId = 0;
+const renderRoomsResults = async () => {
+  const list = $("#roomsResultList");
+  if (!list) return;
+  const renderId = ++roomsResultRenderId;
+  const state = getRoomsSearchState();
+  const note = $("#bookingResultNote");
+  const queryText = $("#roomsResultQuery");
+  const countText = $("#roomsResultCount");
+  const amenitySummary = $("#resultsAmenitySummary");
+  let result = rooms.filter(room => {
+    const admin = getRoomAdmin(room);
+    const roomBranch = String(room.branchId || room.location);
+    if (admin.status === "maintenance" || room.status === "maintenance" || room.status === "hidden") return false;
+    if (state.branchId !== "all" && roomBranch !== state.branchId && room.location !== state.branchId && !room.filters.includes(state.branchId)) return false;
+    if (state.filters.includes("bathtub") && !room.filters.includes("bathtub")) return false;
+    if (state.filters.includes("signature") && !room.filters.includes("signature")) return false;
+    if (state.filters.includes("budget") && !room.filters.includes("budget")) return false;
+    if (state.filters.includes("available") && admin.status !== "available") return false;
+    return true;
+  });
+  result.sort((a, b) => {
+    if (state.roomTypeCode) {
+      if (a.id === state.roomTypeCode) return -1;
+      if (b.id === state.roomTypeCode) return 1;
+    }
+    const packageLabel = BOOKING_PACKAGES[state.packageCode].label;
+    if (state.sort === "price-asc") return numericPrice(a, packageLabel) - numericPrice(b, packageLabel);
+    if (state.sort === "price-desc") return numericPrice(b, packageLabel) - numericPrice(a, packageLabel);
+    return 0;
+  });
+  const place = state.branchId === "all" ? "tất cả địa điểm" : rooms.find(room => String(room.branchId || room.location) === state.branchId)?.location || state.branchId;
+  const guests = `${state.adults} người lớn${state.children ? `, ${state.children} trẻ em` : ""}`;
+  const stay = state.packageCode === "day" ? `${state.nights} đêm` : BOOKING_PACKAGES[state.packageCode].display;
+  const summary = bookingHasExactInterval(state)
+    ? `${result.length} layout cho ${place}, ${formatContactMoment(state.checkinAt)} → ${formatContactMoment(state.checkoutAt)}, ${stay}, ${guests}.`
+    : `${result.length} layout cho ${place}. Chọn đủ ngày và giờ để kiểm tra phòng trống.`;
+  if (queryText) queryText.textContent = state.roomTypeCode ? `${summary} Layout đã chọn được ưu tiên hiển thị đầu danh sách.` : summary;
+  if (countText) countText.textContent = `${result.length} lựa chọn`;
+  if (note) note.textContent = summary;
+  if (amenitySummary) {
+    const keys = [...new Set(result.flatMap(room => getRoomAmenities(room).map(item => item.key)))].slice(0, 8);
+    amenitySummary.innerHTML = keys.map(key => {
+      const item = amenityCatalog[key] || { label: key, icon: "spark" };
+      return `<span>${amenityIcon(item.icon)} ${item.label}</span>`;
+    }).join("");
+  }
+  if (!result.length) {
+    list.innerHTML = `<div class="empty-state"><h3>Chưa có phòng phù hợp</h3><p>Thử đổi địa điểm hoặc bỏ bớt tiện ích để xem thêm lựa chọn.</p></div>`;
+    return;
+  }
+  list.innerHTML = `<div class="availability-loading">${bookingHasExactInterval(state) ? "Đang kiểm tra lịch trống..." : "Đang chuẩn bị catalogue..."}</div>`;
+  let availabilityByRoom = new Map();
+  let alternativesByRoom = new Map();
+  if (bookingHasExactInterval(state)) {
+    try {
+      const availabilityRows = await publicAvailability(state);
+      availabilityByRoom = new Map(availabilityRows.map(row => [row.roomCode, row]));
+      const fullRooms = result.filter(room => availabilityByRoom.get(room.id)?.remaining === 0);
+      alternativesByRoom = new Map(await Promise.all(fullRooms.map(async room => [room.id, await publicAlternatives(state, room.id)])));
+    } catch (error) {
+      if (note) note.textContent = `${summary} Chưa xác minh được lịch trống trực tuyến.`;
+    }
+  }
+  if (renderId !== roomsResultRenderId) return;
+  list.innerHTML = result.map((room, index) => roomResultCardHTML(room, state, index, availabilityByRoom.get(room.id) || null, alternativesByRoom.get(room.id) || [])).join("");
+  initReveal();
+  applyLanguage(getStoredLanguage());
+};
+
 const initRoomsResultsPage = () => {
   if (!$("#roomsResultList")) return;
   
   const mapCard = document.querySelector(".result-map-card");
   if (mapCard && window.rooms?.length) {
-    const coverRoom = window.rooms.find(r => r.id === "C8-THE-ART") || window.rooms[0];
+    const coverRoom = window.rooms[0];
     if (coverRoom && coverRoom.images?.length) {
       mapCard.style.backgroundImage = `linear-gradient(to top, rgba(82,0,8,0.95) 0%, rgba(122,0,0,0.3) 60%, rgba(0,0,0,0) 100%), url("${coverRoom.images[0]}")`;
       mapCard.style.backgroundSize = "cover";
@@ -3616,7 +4410,7 @@ const renderRoomDetail = () => {
   container.innerHTML = `
     <nav class="detail-subnav" aria-label="Điều hướng chi tiết phòng">
       <a href="#overviewPanel">Tổng quan</a>
-      <a href="#bookingPanel">Gói lưu trú</a>
+      <a href="#homeBookingBar">Đặt phòng</a>
       <a href="#galleryPanel">Hình ảnh</a>
       <a href="#guidePanel">Hướng dẫn</a>
       <a href="#faqPanel">FAQ</a>
@@ -3657,7 +4451,7 @@ const renderRoomDetail = () => {
         </div>
 
         <div class="detail-actions">
-          <a class="btn primary magnetic" href="#bookingPanel">Chọn gói lưu trú</a>
+          <a class="btn primary magnetic" href="#homeBookingBar">Chọn lịch</a>
           <a class="btn ghost magnetic" href="#galleryPanel">Xem hình phòng</a>
         </div>
       </div>
@@ -3728,23 +4522,16 @@ const renderRoomDetail = () => {
       </div>
     </section>
 
-    <section id="bookingPanel" class="booking-panel reveal-up">
+    <section id="bookingPanel" class="booking-panel booking-panel-consolidated reveal-up">
       <div class="section-line-heading">
-        <p class="section-kicker">Chọn gói lưu trú</p>
-        <h2>Gói linh hoạt theo lịch ở.</h2>
+        <p class="section-kicker">Đặt trực tiếp</p>
+        <h2>Một biểu mẫu, giữ phòng trong 30 phút.</h2>
       </div>
-      <div class="booking-package-grid">
-        ${room.prices.map((item, index) => `
-          <article class="package-card ${index === 0 ? "is-featured" : ""}">
-            <span>${index === 0 ? "Phổ biến" : "Linh hoạt"}</span>
-            <h3>${item.label}</h3>
-            <strong>${item.value}</strong>
-            <p>${index === 0 ? "Phù hợp cho một buổi nghỉ nhanh, xem phim hoặc đổi không gian." : "Phù hợp cho lịch lưu trú dài hơn, nghỉ ngơi, làm việc nhẹ hoặc chụp hình."}</p>
-            <a class="btn soft small" href="#contact" data-contact-popover data-room-id="${room.id}" data-duration="${item.label}">Nhắn đặt ${room.id}</a>
-          </article>
-        `).join("")}
+      <div class="booking-consolidated-card">
+        <div><span>${room.id}</span><strong>${room.name}</strong><small>Giá từ ${getPrice(room, "3 tiếng")} · tối đa 2 khách/phòng</small></div>
+        <small>Nút “Đặt phòng” luôn ở cuối màn hình và giữ nguyên lịch bạn đã chọn.</small>
       </div>
-      <p class="booking-note">Giá hiển thị là giá tham khảo. Unite sẽ xác nhận lại theo ngày, khung giờ và tình trạng phòng thực tế.</p>
+      <p class="booking-note">Chọn ngày, giờ và gói ở thanh đặt phòng phía trên; biểu mẫu sẽ giữ nguyên lựa chọn, không bắt bạn nhập lại.</p>
     </section>
 
     <section id="guidePanel" class="guide-section reveal-up">
@@ -3816,7 +4603,7 @@ const renderRoomDetail = () => {
       </div>
       <div class="related-grid">
         ${relatedRooms.map(item => `
-          <a class="related-card" href="room.html?id=${item.id}">
+          <a class="related-card" href="${bookingUrl("room.html", readBookingState(), { branchId: item.branchId || item.location, roomTypeCode: item.id })}">
             ${imgTag(getMainImage(item), item.name)}
             <span>${item.id}</span>
             <h3>${item.name}</h3>
@@ -3825,11 +4612,6 @@ const renderRoomDetail = () => {
         `).join("")}
       </div>
     </section>
-
-    <div class="floating-book">
-      <span>${room.name}</span>
-      <a class="btn primary small" href="#bookingPanel">Đặt phòng</a>
-    </div>
 
     <div class="lightbox" id="lightbox" aria-hidden="true">
       <button class="lightbox-close" type="button" aria-label="Đóng">×</button>
@@ -3840,6 +4622,15 @@ const renderRoomDetail = () => {
   initReveal();
   initMagneticButtons();
   bindLightbox();
+  $$('[data-canonical-room-book]', container).forEach(button => button.addEventListener("click", () => {
+    const state = readBookingState({ roomTypeCode: room.id, branchId: room.branchId || room.location });
+    if (!bookingHasExactInterval(state)) {
+      $("#homeBookingBar")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => $("#homeBookingBar [data-panel='dates'] .booking-trigger")?.click(), 350);
+      return;
+    }
+    openContactModal(getContactContext({ ...state, roomId: room.id, packageCode: state.packageCode, checkinAt: state.checkinAt }));
+  }));
 };
 
 const bindLightbox = () => {
@@ -3878,12 +4669,12 @@ const bindLightbox = () => {
 const loadPublicRoomsFromSupabase = async () => {
   const config = window.UNITE_SUPABASE_CONFIG || {};
   const baseUrl = String(config.url || "").replace(/\/$/, "");
-  const key = config.anonKey || config.publishableKey || "";
+  const key = config.publishableKey || config.anonKey || "";
   if (!baseUrl || !key || baseUrl.includes("PASTE_") || key.includes("PASTE_")) return false;
   try {
     const select = [
       "id","code","name","category","price_tier","vibe","short_line","description","inventory_count","status","is_published","sort_order",
-      "branches!inner(name,area,public_address)",
+      "branches!inner(id,name,area,public_address,is_active)",
       "room_prices(package_code,package_label,duration_hours,base_price,sale_price,sort_order,is_active)",
       "room_images(storage_path,public_url,sort_order,is_cover,is_active)",
       "promotions(title,discount_percent,discount_amount,badge_label,show_badge,starts_at,ends_at,is_active,created_at)"
@@ -3923,7 +4714,8 @@ const loadPublicRoomsFromSupabase = async () => {
         let sale = Number(p.sale_price || base);
         if (promotion?.discount_percent) sale = Math.round(base * (100 - Number(promotion.discount_percent)) / 100);
         else if (promotion?.discount_amount) sale = Math.max(0, base - Number(promotion.discount_amount));
-        return { label:displayLabel, packageCode:p.package_code || "", durationHours:Number(p.duration_hours || 0), value:formatKPrice(sale / 1000), originalValue:sale < base ? formatKPrice(base / 1000) : "", basePrice:base, salePrice:sale };
+        const packageCode = normalizeBookingPackageCode(p.package_code || displayLabel);
+        return { label:displayLabel, packageCode, durationHours:packageCode === "day" ? 22 : Number(p.duration_hours || BOOKING_PACKAGES[packageCode].hours), value:formatKPrice(sale / 1000), originalValue:sale < base ? formatKPrice(base / 1000) : "", basePrice:base, salePrice:sale };
       });
       
       const labelOrder = { "3 tiếng": 1, "4 tiếng": 2, "Qua đêm": 3, "Ngày": 4 };
@@ -3931,6 +4723,8 @@ const loadPublicRoomsFromSupabase = async () => {
 
       return ({
       id: row.code,
+      roomTypeId: row.id,
+      branchId: row.branches?.id || row.branches?.name || "",
       chapter: row.code?.split("-")?.[0]?.replace("C", "Chapter ") || "Chapter",
       type: "Studio",
       name: row.name,
@@ -3951,13 +4745,51 @@ const loadPublicRoomsFromSupabase = async () => {
       filters: [row.branches?.name, row.branches?.area, row.category, row.price_tier].filter(Boolean),
       images: (row.room_images || []).filter(img => img.is_active !== false).sort((a,b)=>(b.is_cover===true)-(a.is_cover===true) || (a.sort_order||0)-(b.sort_order||0)).map(imageUrl).filter(Boolean)
     });
-    });
+    }).filter(room => !["maintenance", "hidden", "inactive", "closed"].includes(String(room.status || "").toLowerCase()));
     window.rooms = rooms;
     return true;
   } catch (error) {
     console.warn("Public Supabase catalogue fallback to local rooms.js", error);
     return false;
   }
+};
+
+const syncPublicCatalogueMetadata = () => {
+  const activeRooms = rooms.filter(room => !["maintenance", "hidden", "inactive", "closed"].includes(String(room.status || "").toLowerCase()) && getRoomAdmin(room).status !== "maintenance");
+  if (activeRooms.length !== rooms.length) {
+    rooms = activeRooms;
+    window.rooms = rooms;
+  }
+  const branches = [...new Set(rooms.map(room => normalizeDestination(room.location)).filter(Boolean))];
+  const threeHourPrices = rooms.map(room => {
+    const item = getPriceItem(room, "3 tiếng");
+    if (Number.isFinite(Number(item?.salePrice)) && Number(item.salePrice) > 0) return Number(item.salePrice) / 1000;
+    return numericPrice(room, "3 tiếng");
+  }).filter(price => Number.isFinite(price) && price < Number.MAX_SAFE_INTEGER);
+  const minPrice = threeHourPrices.length ? Math.min(...threeHourPrices) : 299;
+  const proofItems = $$(".home-proof-strip > div");
+  if (proofItems[0]) { $("strong", proofItems[0]).textContent = String(rooms.length); $("span", proofItems[0]).textContent = "layout đang mở"; }
+  if (proofItems[1]) { $("strong", proofItems[1]).textContent = String(branches.length); $("span", proofItems[1]).textContent = "địa điểm đang mở"; }
+  if (proofItems[2]) { $("strong", proofItems[2]).textContent = `Từ ${formatKPrice(minPrice)}`; $("span", proofItems[2]).textContent = "cho gói 3 giờ"; }
+  if (proofItems[3]) { $("strong", proofItems[3]).textContent = "1 bước"; $("span", proofItems[3]).textContent = "chọn lịch và giữ phòng"; }
+  $$('[data-destination="all"] small').forEach(element => { element.textContent = `${rooms.length} layout đang mở`; });
+  $$('[data-destination]').forEach(button => {
+    const destination = normalizeDestination(button.dataset.destination || "all");
+    if (destination !== "all") button.hidden = !branches.includes(destination);
+  });
+  $$(".filter-btn[data-filter]").forEach(button => {
+    const filter = button.dataset.filter;
+    if (/^Chi nhánh/i.test(filter || "")) button.hidden = !branches.includes(filter);
+  });
+  $$(".home-room-grid").forEach(grid => {
+    const block = grid.closest(".home-block");
+    if (block) block.hidden = !grid.children.length;
+  });
+  const locationFaq = $$(".home-faq-card").find(card => $("h3", card)?.textContent.trim() === "Địa điểm ở đâu?");
+  const locationCopy = $("p", locationFaq || document.createElement("div"));
+  if (locationCopy) locationCopy.textContent = branches.length
+    ? `Hiện có ${branches.join(", ")}, đều ở khu Phú Nhuận.`
+    : "Catalogue địa điểm đang được cập nhật.";
 };
 
 const init = async () => {
@@ -3967,11 +4799,12 @@ const init = async () => {
   initHeaderQuickContact();
   initReveal();
   initMagneticButtons();
-  initSmartBookingDock();
   initContactChannels();
 
   await loadPublicRoomsFromSupabase();
+  syncPublicCatalogueMetadata();
   syncStaticLiveImages();
+  initSmartBookingDock();
 
   const page = document.body.dataset.page;
 
@@ -3980,6 +4813,7 @@ const init = async () => {
     renderReel();
     renderHomeRooms();
     renderPriceCompare(rooms);
+    syncPublicCatalogueMetadata();
     renderRules();
     bindFilters();
     initHomeBookingWidget();
