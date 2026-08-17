@@ -1404,6 +1404,24 @@ const bookingHasExactInterval = (state) => {
   return !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end > start;
 };
 
+const bookingRoomCodesInScope = (state = {}, fixedRoom = null) => {
+  const explicitRoomCode = String(fixedRoom?.id || state.roomTypeCode || "").trim();
+  if (explicitRoomCode) {
+    return new Set(rooms.some(room => room.id === explicitRoomCode) ? [explicitRoomCode] : []);
+  }
+  const branchId = String(state.branchId || state.branch || "all").trim();
+  if (!branchId || branchId === "all") return new Set(rooms.map(room => room.id));
+  const normalizedBranch = normalizeDestination(branchId);
+  return new Set(rooms
+    .filter(room => String(room.branchId || "") === branchId || normalizeDestination(room.location) === normalizedBranch)
+    .map(room => room.id));
+};
+
+const bookingAvailabilityRowsInScope = (rows = [], state = {}, fixedRoom = null) => {
+  const roomCodes = bookingRoomCodesInScope(state, fixedRoom);
+  return (Array.isArray(rows) ? rows : []).filter(row => roomCodes.has(row.roomCode || row.room_code || ""));
+};
+
 const bookingTimeOptions = () => Array.from({ length: 48 }, (_, index) => {
   const hours = String(Math.floor(index / 2)).padStart(2, "0");
   const minutes = index % 2 ? "30" : "00";
@@ -3219,11 +3237,18 @@ const initHomeBookingWidget = () => {
       note.textContent = "Chọn đủ ngày và giờ nhận để xem số phòng còn trống.";
       return;
     }
+    const scopedRoomCodes = bookingRoomCodesInScope(state, fixedRoom);
+    if (!scopedRoomCodes.size) {
+      note.textContent = "Địa điểm này chưa có layout đang mở.";
+      return;
+    }
     availabilityAbort = new AbortController();
     note.textContent = "Đang kiểm tra phòng trống theo khung giờ...";
     try {
-      const rows = await publicAvailability(state, fixedRoom?.id || null, { signal: availabilityAbort.signal });
-      const remaining = rows.reduce((sum, row) => sum + row.remaining, 0);
+      const scopedRoomCode = scopedRoomCodes.size === 1 ? [...scopedRoomCodes][0] : null;
+      const rows = await publicAvailability(state, scopedRoomCode, { signal: availabilityAbort.signal });
+      const scopedRows = bookingAvailabilityRowsInScope(rows, state, fixedRoom);
+      const remaining = scopedRows.reduce((sum, row) => sum + row.remaining, 0);
       note.textContent = remaining > 0
         ? `Còn ${remaining} phòng phù hợp từ ${formatContactMoment(state.checkinAt)} đến ${formatContactMoment(state.checkoutAt)}.`
         : "Hết phòng trong khung giờ này. Mở danh sách để xem lịch gần nhất còn phòng.";

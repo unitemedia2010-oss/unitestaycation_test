@@ -113,6 +113,13 @@ for (const roomCode of ["C8-THE-ART", "C9-VELVET", "C10-MIDNIGHT"]) {
 }
 const activeFallbackCodes = JSON.parse(JSON.stringify(vm.runInContext("syncPublicCatalogueMetadata(); rooms.map(room => room.id)", context)));
 assert.deepEqual(activeFallbackCodes, ["C1-ELAN", "C1-NOIR", "C12-AMOR", "C12-ROMA"], "offline catalogue excludes every hidden Phan Tay Ho layout");
+const nhieuTuRemaining = vm.runInContext(`bookingAvailabilityRowsInScope([
+  { roomCode: "C1-ELAN", remaining: 3 },
+  { roomCode: "C1-NOIR", remaining: 3 },
+  { roomCode: "C12-AMOR", remaining: 3 },
+  { roomCode: "C12-ROMA", remaining: 3 }
+], { branchId: "Chi nhánh Nhiêu Tứ", roomTypeCode: "" }).reduce((sum, row) => sum + row.remaining, 0)`, context);
+assert.equal(nhieuTuRemaining, 6, "branch availability sums only layouts belonging to Nhiêu Tứ");
 
 const indexSource = read("index.html");
 assert.match(read("css/custom.css"), /\.filter-btn\[hidden\][\s\S]*?display:\s*none\s*!important/, "hidden branch filters remain visually hidden despite component display rules");
@@ -124,7 +131,7 @@ for (const page of ["index.html", "rooms.html", "room.html"]) {
   const html = read(page);
   assert.match(html, /css\/custom\.css\?v=v16\.5/);
   assert.match(html, /js\/rooms\.js\?v=v16\.5/);
-  assert.match(html, /js\/app\.js\?v=v16\.5/);
+  assert.match(html, /js\/app\.js\?v=v16\.6/);
 }
 
-console.log("public-booking-v16: 61 assertions passed");
+console.log("public-booking-v16: 62 assertions passed");
